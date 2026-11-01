@@ -36,7 +36,7 @@ CREATE OR REPLACE PACKAGE pkg_tratada AS
   --   com chave: MERGE pela chave, como o gravar_registro;
   --   sem chave (ex.: Reserva Legal): carga-retrato. Insere tudo e apaga o que
   --   versões anteriores gravaram para os mesmos imóveis (quando o mapeamento
-  --   tem cod_imovel, a regra do GravadorReservaLegal do back-end) ou, sem
+  --   tem cod_imovel) ou, sem
   --   cod_imovel, tudo o que versões anteriores do mesmo conjunto gravaram.
   -- Devolve quantas linhas gravou. Não dá COMMIT.
   --   ORA-20013: a fonte não tem mapeamento, ou a tabela exige um campo que o
@@ -200,7 +200,7 @@ CREATE OR REPLACE PACKAGE BODY pkg_tratada AS
       END IF;
     END LOOP;
 
-    -- Regra do CAR, a mesma do GravadorImoveis.estado: UF pelo prefixo do
+    -- Regra do CAR: UF pelo prefixo do
     -- código ("PR-4113700-..." -> "PR").
     IF p_tabela = 'imovel_rural' AND v_cod_imovel IS NOT NULL AND NOT tem_campo(v, 'estado') THEN
       acrescentar(v, 'estado',

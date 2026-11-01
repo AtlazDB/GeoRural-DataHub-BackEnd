@@ -42,11 +42,12 @@ jobs:
           cache: maven
 
       # Os testes de repositorio e de servico precisam do Oracle do docker-compose e ficam
-      # de fora. Estes rodam sem banco: controllers (WebMvcTest), validador e leitor de shapefile.
+      # de fora. Estes rodam sem banco: controllers (WebMvcTest), fila do Airflow, coleta e
+      # "Testar link" (servidor HTTP local) e a trava de URL externa.
       - name: Compilar e rodar os testes que nao precisam de banco
         run: >
           mvn -B -q verify
-          -Dtest='*ControllerTest,ValidadorImovelTest,LeitorShapefileTest'
+          -Dtest='*ControllerTest,ProcessamentoArquivoServiceTest,ColetaLinkServiceTest,TesteLinkServiceTest,ValidadorUrlExternaTest'
           -Dsurefire.failIfNoSpecifiedTests=false
 
   deploy:
