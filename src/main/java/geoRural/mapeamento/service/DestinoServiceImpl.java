@@ -28,6 +28,7 @@ public class DestinoServiceImpl implements DestinoService {
         TABELAS.put("car_reserva_legal", "Reserva Legal (CAR)");
         TABELAS.put("foco_calor", "Focos de calor");
         TABELAS.put("municipio", "Municípios");
+        TABELAS.put("input_feature", "Insumo genérico (indicadores)");
     }
 
     /**
