@@ -7,8 +7,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
+@Tag(name = "Mapeamento")
 @RequestMapping("/api/v1/dominios")
 public class DominioController {
 
@@ -18,6 +21,7 @@ public class DominioController {
         this.dominioService = dominioService;
     }
 
+    @Operation(summary = "Domínios de valores usados nas regras")
     @GetMapping
     public List<DominioResponse> listar() {
         return dominioService.listar().stream()

@@ -7,8 +7,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
+@Tag(name = "Mapeamento")
 @RequestMapping("/api/v1/referencias-cruzadas")
 public class ReferenciaCruzadaController {
 
@@ -18,6 +21,7 @@ public class ReferenciaCruzadaController {
         this.referenciaCruzadaService = referenciaCruzadaService;
     }
 
+    @Operation(summary = "Referências cruzadas usadas nas regras")
     @GetMapping
     public List<ReferenciaCruzadaResponse> listar() {
         return referenciaCruzadaService.listar().stream()

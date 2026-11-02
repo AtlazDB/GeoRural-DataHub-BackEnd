@@ -127,6 +127,12 @@
 			<artifactId>springboot4-dotenv</artifactId>
 			<optional>true</optional>
 		</dependency>
+		<!-- Swagger/OpenAPI: a linha 3.x é a do Spring Boot 4 (a 2.x é do Boot 3 e quebra aqui) -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.1.1</version>
+		</dependency>
 
 </dependencies>
 
