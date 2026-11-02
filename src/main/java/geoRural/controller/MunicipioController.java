@@ -8,8 +8,11 @@ import geoRural.service.MunicipioService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
+@Tag(name = "Municípios", description = "Malha municipal")
 @RequestMapping("/api/v1/municipios")
 public class MunicipioController {
 
@@ -23,6 +26,7 @@ public class MunicipioController {
         this.geoJsonService = geoJsonService;
     }
 
+    @Operation(summary = "Lista os municípios (sem geometria)")
     @GetMapping
     public List<MunicipioResumoResponse> listar(
             @RequestParam(required = false) String estado) {
@@ -32,6 +36,7 @@ public class MunicipioController {
                 .toList();
     }
 
+    @Operation(summary = "Um município com a geometria")
     @GetMapping("/{codIbge}")
     public MunicipioResponse buscarPorCodigo(
             @PathVariable String codIbge) {

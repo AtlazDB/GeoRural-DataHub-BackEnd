@@ -5,8 +5,11 @@ import geoRural.service.ArquivoBrutoService;
 import geoRural.service.ProcessamentoArquivoService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
+@Tag(name = "Arquivos", description = "Arquivos da zona bruta: fila do Airflow e exclusão")
 @RequestMapping("/api/v1/arquivos")
 public class ArquivoController {
 
@@ -24,12 +27,14 @@ public class ArquivoController {
      * Com o arquivo do Paraná isso vai passar do timeout do navegador; aí vira @Async + 202.
      * O leitor é escolhido pela fonte do arquivo: CAR (imóveis), CAR-RL (Reserva Legal) ou INPE-FOCOS.
      */
+    @Operation(summary = "Põe o arquivo na fila do Airflow (RECEBIDO)")
     @PostMapping("/{id}/processar")
     public ProcessamentoResponse processar(@PathVariable Long id) {
         return processamentoArquivoService.processar(id);
     }
 
     /** Só para arquivo REJEITADO que nunca gerou versão de dados; senão 409. */
+    @Operation(summary = "Exclui um arquivo rejeitado que nunca gerou versão de dados")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void excluir(@PathVariable Long id) {

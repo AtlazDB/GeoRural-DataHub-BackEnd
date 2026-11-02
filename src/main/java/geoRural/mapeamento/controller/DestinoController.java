@@ -7,9 +7,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 /** As tabelas da Zona Tratada e os campos que o mapeamento pode preencher (tela de mapeamento). */
 @RestController
+@Tag(name = "Mapeamento")
 @RequestMapping("/api/v1/destinos")
 public class DestinoController {
 
@@ -19,6 +22,7 @@ public class DestinoController {
         this.destinoService = destinoService;
     }
 
+    @Operation(summary = "Tabelas de destino do mapeamento e os campos de cada uma")
     @GetMapping
     public List<DestinoResponse> listar() {
         return destinoService.listar();
