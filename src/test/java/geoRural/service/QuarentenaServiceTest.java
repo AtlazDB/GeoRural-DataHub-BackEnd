@@ -205,6 +205,18 @@ class QuarentenaServiceTest {
     }
 
     @Test
+    void substituidoNaoContaNoTotalNemNaListaGeral() {
+        long id = quarentena("{\"area_ha\": \"12.5\"}");
+        long total = service.obterMetricas().total();
+        jdbc.update("UPDATE registro_quarentena SET status_analise = 'SUBSTITUIDO' WHERE id = ?", id);
+
+        assertThat(service.obterMetricas().total()).isEqualTo(total - 1);
+        assertThat(service.listar(new QuarentenaFiltroDTO(null, fonteId, null, null), Pageable.unpaged())).isEmpty();
+        assertThat(service.listar(new QuarentenaFiltroDTO(null, fonteId, "SUBSTITUIDO", null), Pageable.unpaged()))
+                .extracting(r -> r.getId()).containsExactly(id);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void geometriaVemEmGeoJson() {
         jdbc.update("""
