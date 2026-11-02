@@ -43,7 +43,7 @@ public class AirflowClient {
                          @Value("${app.airflow.url}") String url,
                          @Value("${app.airflow.usuario:}") String usuario,
                          @Value("${app.airflow.senha:}") String senha,
-                         @Value("${app.airflow.espera-segundos:60}") long esperaSegundos) {
+                         @Value("${app.airflow.espera-segundos:45}") long esperaSegundos) {
         this.objectMapper = objectMapper;
         // HTTP/1.1: por padrão o cliente pede o upgrade para HTTP/2, e a API do Airflow responde 400.
         this.http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
