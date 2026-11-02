@@ -1,6 +1,7 @@
 package geoRural.exception;
 
 import geoRural.dto.ErroResponse;
+import geoRural.indicator.exception.DuplicateIndicatorCodeException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -69,6 +70,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(SiglaDuplicadaException.class)
     public ResponseEntity<ErroResponse> handleSiglaDuplicada(SiglaDuplicadaException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateIndicatorCodeException.class)
+    public ResponseEntity<ErroResponse> handleDuplicateIndicatorCode(DuplicateIndicatorCodeException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
