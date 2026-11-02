@@ -52,11 +52,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ErroResponse.de(ex.getMessage()));
     }
 
-    @ExceptionHandler(CargaNaoPermitidaException.class)
-    public ResponseEntity<ErroResponse> handleCargaNaoPermitida(CargaNaoPermitidaException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
-    }
-
     @ExceptionHandler(ExclusaoNaoPermitidaException.class)
     public ResponseEntity<ErroResponse> handleExclusaoNaoPermitida(ExclusaoNaoPermitidaException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
