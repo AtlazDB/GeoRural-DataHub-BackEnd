@@ -23,11 +23,10 @@ public class ArquivoController {
     }
 
     /**
-     * Síncrono por enquanto: a resposta só volta quando o processamento termina.
-     * Com o arquivo do Paraná isso vai passar do timeout do navegador; aí vira @Async + 202.
-     * O leitor é escolhido pela fonte do arquivo: CAR (imóveis), CAR-RL (Reserva Legal) ou INPE-FOCOS.
+     * Reserva o arquivo e dispara a DAG processar_arquivo. A resposta é imediata: o resultado chega
+     * depois, pelo status do arquivo. Airflow fora do ar: 503, e o arquivo fica RECEBIDO.
      */
-    @Operation(summary = "Põe o arquivo na fila do Airflow (RECEBIDO)")
+    @Operation(summary = "Dispara no Airflow o processamento do arquivo (PROCESSANDO)")
     @PostMapping("/{id}/processar")
     public ProcessamentoResponse processar(@PathVariable Long id) {
         return processamentoArquivoService.processar(id);

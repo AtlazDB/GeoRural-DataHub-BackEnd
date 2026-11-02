@@ -103,10 +103,10 @@ public class FonteController {
     }
 
     /**
-     * "Executar agora" de uma fonte por link: 202, o pedido fica na fila da DAG coleta_fontes, que
-     * pagina o serviço (SOLICITADA). O andamento aparece depois na fonte.
+     * "Executar agora" de uma fonte por link: 202, a DAG coletar_fonte foi disparada e pagina o
+     * serviço (SOLICITADA). O andamento aparece depois na fonte. Airflow fora do ar: 503.
      */
-    @Operation(summary = "Pede ao Airflow a coleta do link da fonte")
+    @Operation(summary = "Dispara no Airflow a coleta do link da fonte")
     @PostMapping("/{id}/executar")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ColetaResponse executar(@PathVariable Long id) {

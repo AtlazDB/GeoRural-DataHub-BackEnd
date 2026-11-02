@@ -10,7 +10,7 @@ import java.util.List;
  * Uma fonte com os arquivos recebidos. {@code cabecalhos} e {@code credencialRef} não vêm de
  * propósito: podem levar token de acesso, e a lista de fontes é aberta a quem usa a tela.
  *
- * {@code coletando}: há pedido de coleta na fila do Airflow, ou uma coleta começou e ainda não
+ * {@code coletando}: a coleta foi pedida ao Airflow, ou uma coleta começou e ainda não
  * terminou (a DAG coletar_fonte escreve o andamento na mensagem e só preenche
  * {@code ultimaColetaEm} no fim, com sucesso ou não).
  */
