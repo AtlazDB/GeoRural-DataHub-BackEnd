@@ -13,7 +13,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Os destinos vêm de uma lista fechada de tabelas (as que o pkg_tratada sabe gravar e os
+ * Os destinos vêm de uma lista fechada de tabelas (as que o Airflow sabe gravar e os
  * indicadores leem), e os campos de cada uma vêm do próprio banco (user_tab_columns): coluna
  * nova numa migration aparece sozinha na tela de mapeamento.
  */
@@ -32,12 +32,12 @@ public class DestinoServiceImpl implements DestinoService {
     }
 
     /**
-     * Colunas que o mapeamento não preenche: a chave técnica, a versão (o pkg_tratada põe a da
+     * Colunas que o mapeamento não preenche: a chave técnica, a versão (a gravação no Airflow põe a da
      * carga), a data de criação e o vínculo com o município (etapa de cruzamento).
      */
-    private static final Set<String> FORA_DO_MAPEAMENTO = Set.of("id", "dataset_versao_id", "criado_em", "municipio_id");
+    private static final Set<String> FORA_DO_MAPEAMENTO = Set.of("id", "dataset_versao_id", "hash_registro", "criado_em", "municipio_id");
 
-    /** Preenchidas pelo pkg_tratada quando não são mapeadas: não são obrigatórias no mapeamento. */
+    /** Preenchidas pela gravação no Airflow quando não são mapeadas: não são obrigatórias no mapeamento. */
     private static final Map<String, String> DERIVADAS = Map.of(
             "imovel_rural.estado", "Preenchido sozinho pelo prefixo do código do imóvel (PR-...), se não for mapeado.",
             "municipio.estado", "Preenchido sozinho pelos dois primeiros dígitos do código IBGE, se não for mapeado.");

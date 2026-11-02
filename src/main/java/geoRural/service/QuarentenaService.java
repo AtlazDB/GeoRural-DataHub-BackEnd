@@ -1,6 +1,7 @@
 package geoRural.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import geoRural.dto.*;
@@ -12,27 +13,19 @@ import geoRural.exception.ResourceNotFoundException;
 import geoRural.repository.RegistroQuarentenaRepository;
 import jakarta.persistence.EntityManager;
 import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.PrecisionModel;
+import org.locationtech.jts.geom.util.GeometryFixer;
 import org.locationtech.jts.io.ParseException;
-import org.locationtech.jts.io.WKTReader;
-import org.locationtech.jts.io.WKTWriter;
-import org.springframework.dao.DataAccessException;
+import org.locationtech.jts.operation.valid.IsValidOp;
+import org.locationtech.jts.operation.valid.TopologyValidationError;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.jdbc.core.ConnectionCallback;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.sql.CallableStatement;
-import java.sql.Clob;
-import java.sql.SQLException;
-import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -41,23 +34,31 @@ public class QuarentenaService {
     // Status em que a análise já acabou: nenhuma ação muda mais o registro.
     private static final Set<String> STATUS_ENCERRADOS = Set.of("DESCARTADO", "REVALIDADO", "SUBSTITUIDO");
 
+    // A DAG do Airflow que revalida um registro, com as mesmas regras da carga.
+    private static final String DAG_REVALIDAR = "revalidar_registro";
+    private static final String TAREFA_REVALIDAR = "revalidar";
+    private static final String STATUS_RECUSADO = "RECUSADO";
+
+    // Quanto a área pode encolher numa correção automática (a mesma trava da carga, regras.py).
+    private static final double VARIACAO_AREA_CORRECAO = 0.01;
+
     private final RegistroQuarentenaRepository repository;
-    private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final GeoJsonService geoJsonService;
     private final EntityManager entityManager;
-    private final WKTReader wktReader = new WKTReader(
-            new GeometryFactory(new PrecisionModel(), GeoJsonService.SRID_WGS84));
-    private final WKTWriter wktWriter = new WKTWriter();
+    private final AirflowClient airflow;
+    private final TransactionTemplate transacao;
 
-    public QuarentenaService(RegistroQuarentenaRepository repository, JdbcTemplate jdbcTemplate,
+    public QuarentenaService(RegistroQuarentenaRepository repository,
                              ObjectMapper objectMapper, GeoJsonService geoJsonService,
-                             EntityManager entityManager) {
+                             EntityManager entityManager, AirflowClient airflow,
+                             TransactionTemplate transacao) {
         this.repository = repository;
-        this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.geoJsonService = geoJsonService;
         this.entityManager = entityManager;
+        this.airflow = airflow;
+        this.transacao = transacao;
     }
 
     public Page<RegistroQuarentena> listar(QuarentenaFiltroDTO filtro, Pageable pageable) {
@@ -86,47 +87,42 @@ public class QuarentenaService {
     }
 
     /**
-     * Sugestão da correção automática (pkg_quality.fix_geometry, o mesmo RECTIFY do validate)
-     * em GeoJSON. Não grava: a tela mostra a prévia e o operador salva se concordar.
+     * Sugestão da correção automática em GeoJSON, com o JTS (mesmo padrão OGC do Shapely, que julga
+     * na carga). Não grava: a tela mostra a prévia e o operador salva se concordar.
      */
     public Map<String, Object> suggestGeometryFix(Long id) {
-        RegistroQuarentena registro = buscarEmAberto(id);
-        if (registro.getGeometria() == null) {
+        Geometry original = buscarEmAberto(id).getGeometria();
+        if (original == null) {
             throw new RequisicaoInvalidaException(
                     "O registro não tem geometria legível para corrigir automaticamente: corrija pelo GeoJSON ou descarte com justificativa.",
                     List.of("geometria"));
         }
-
-        Map<String, String> resultado = jdbcTemplate.queryForObject("""
-                SELECT pkg_quality.validate_geometry(geometria) AS validacao,
-                       SDO_UTIL.TO_WKTGEOMETRY(pkg_quality.fix_geometry(geometria)) AS corrigida
-                  FROM registro_quarentena
-                 WHERE id = ?""",
-                (rs, n) -> Map.of("validacao", rs.getString("validacao"),
-                                  "corrigida", Objects.toString(rs.getString("corrigida"), "")),
-                id);
-
-        if ("TRUE".equals(resultado.get("validacao"))) {
+        if (original.isValid()) {
             throw new RequisicaoInvalidaException(
                     "A geometria original já é válida: não há o que corrigir automaticamente.", List.of("geometria"));
         }
-        if (resultado.get("corrigida").isEmpty()) {
+
+        Geometry corrigida = GeometryFixer.fix(original);
+        if (corrigida.isEmpty() || !corrigida.isValid() || corrigida.getDimension() != original.getDimension()
+                || perdeuAreaDemais(original, corrigida)) {
             throw new RequisicaoInvalidaException(
                     "A correção automática não conseguiu deixar a geometria válida: edite os vértices no mapa.",
                     List.of("geometria"));
         }
+        return geoJsonService.converter(corrigida);
+    }
 
-        try {
-            return geoJsonService.converter(wktReader.read(resultado.get("corrigida")));
-        } catch (ParseException e) {
-            throw new IllegalStateException("WKT inválido do fix_geometry: " + resultado.get("corrigida"), e);
+    private static boolean perdeuAreaDemais(Geometry antes, Geometry depois) {
+        if (antes.getDimension() != 2) {
+            return false;
         }
+        return depois.getArea() <= 0 || (antes.getArea() > 0 && depois.getArea() < antes.getArea() * (1 - VARIACAO_AREA_CORRECAO));
     }
 
     /**
-     * Grava a geometria corrigida (editada à mão ou a sugestão automática). Só aceita se o Oracle
-     * a considerar válida, na mesma tolerância do validate. Como o payload corrigido, deixa o
-     * registro CORRIGIDO, pronto para revalidar.
+     * Grava a geometria corrigida (editada à mão ou a sugestão automática). Só aceita se for
+     * válida no padrão OGC (JTS), o mesmo do Shapely, que julga no "Revalidar". Como o payload
+     * corrigido, deixa o registro CORRIGIDO, pronto para revalidar.
      */
     @Transactional
     public RegistroQuarentena saveCorrectedGeometry(Long id, GeometryCorrectionRequest dto) {
@@ -144,11 +140,10 @@ public class QuarentenaService {
                     List.of("geometria"));
         }
 
-        String validacao = validateInOracle(geometria);
-        if (!"TRUE".equals(validacao)) {
+        TopologyValidationError erro = new IsValidOp(geometria).getValidationError();
+        if (erro != null) {
             throw new RequisicaoInvalidaException(
-                    "A geometria corrigida ainda é inválida: " + describeOracleValidation(validacao),
-                    List.of("geometria"));
+                    "A geometria corrigida ainda é inválida: " + descreverErro(erro), List.of("geometria"));
         }
 
         registro.setGeometriaCorrigida(geometria);
@@ -160,35 +155,20 @@ public class QuarentenaService {
         return repository.save(registro);
     }
 
-    /** pkg_quality.validate_geometry na geometria em WKT. CLOB: um polígono do CAR passa fácil de 4000 caracteres. */
-    private String validateInOracle(Geometry geometria) {
-        String wkt = wktWriter.write(geometria);
-        return jdbcTemplate.execute((ConnectionCallback<String>) con -> {
-            try (CallableStatement cs = con.prepareCall(
-                    "BEGIN ? := pkg_quality.validate_geometry(SDO_GEOMETRY(?, " + GeoJsonService.SRID_WGS84 + ")); END;")) {
-                Clob clob = con.createClob();
-                clob.setString(1, wkt);
-                cs.registerOutParameter(1, Types.VARCHAR);
-                cs.setClob(2, clob);
-                cs.execute();
-                return cs.getString(1);
-            }
-        });
-    }
-
-    /** "13349 [Element <1>] [Ring <1>]..." → texto para a tela, com o código do Oracle no fim. */
-    static String describeOracleValidation(String validacao) {
-        String codigo = validacao.length() >= 5 ? validacao.substring(0, 5) : validacao;
-        String texto = switch (codigo) {
-            case "13349" -> "o contorno do polígono se cruza";
-            case "13356" -> "há vértices repetidos em sequência";
-            case "13348" -> "o contorno do polígono não fecha";
-            case "13343" -> "o polígono tem menos de 3 vértices";
-            case "13350", "13351" -> "anéis do polígono se tocam ou se sobrepõem";
-            case "13367" -> "os anéis estão no sentido errado";
-            default -> "erro de geometria do Oracle";
+    /** O erro de topologia em texto para a tela, com o ponto [x y], que o mapa marca em vermelho. */
+    static String descreverErro(TopologyValidationError erro) {
+        String texto = switch (erro.getErrorType()) {
+            case TopologyValidationError.SELF_INTERSECTION, TopologyValidationError.RING_SELF_INTERSECTION
+                    -> "o contorno do polígono se cruza";
+            case TopologyValidationError.RING_NOT_CLOSED -> "o contorno do polígono não fecha";
+            case TopologyValidationError.TOO_FEW_POINTS -> "o polígono tem menos de 3 vértices";
+            case TopologyValidationError.NESTED_HOLES, TopologyValidationError.DISCONNECTED_INTERIOR,
+                 TopologyValidationError.HOLE_OUTSIDE_SHELL, TopologyValidationError.NESTED_SHELLS,
+                 TopologyValidationError.DUPLICATE_RINGS -> "anéis do polígono se tocam ou se sobrepõem";
+            default -> "erro de geometria: " + erro.getMessage();
         };
-        return texto + " (" + validacao + ").";
+        return erro.getCoordinate() == null ? texto + "."
+                : texto + " [" + erro.getCoordinate().x + " " + erro.getCoordinate().y + "].";
     }
 
     private RegistroQuarentena buscarEmAberto(Long id) {
@@ -199,8 +179,7 @@ public class QuarentenaService {
         return registro;
     }
 
-    // O revalidar_registro grava o payload na staging, que exige um objeto JSON
-    // (o pkg_quality lê cada campo com JSON_VALUE).
+    // O "Revalidar" lê cada campo do payload pelo nome: ele precisa ser um objeto JSON.
     private void conferirJson(String payload) {
         JsonNode json;
         try {
@@ -256,64 +235,27 @@ public class QuarentenaService {
         return repository.save(registro);
     }
 
-    @Transactional
+    /**
+     * Revalida pela DAG do Airflow, que usa as mesmas regras da carga e, se passar, grava na Zona
+     * Tratada e encerra o registro. Sem transação aqui: a DAG trava o registro na conexão dela, e
+     * o back-end só espera a resposta (uns 3 segundos). Reprovado: continua na quarentena como
+     * está, e a tela mostra os erros. Recusado (carga mais nova, sem versão...): 409 com o motivo.
+     */
     public RevalidationResponse revalidar(Long id) {
-        RegistroQuarentena registro = buscarEmAberto(id);
-        RevalidationResponse result = callRevalidation(id);
+        buscarEmAberto(id);
+        JsonNode resultado = airflow.executar(DAG_REVALIDAR, TAREFA_REVALIDAR, Map.of("quarentena_id", id));
 
-        // Reprovado: continua na quarentena como está; a tela mostra os erros.
-        if (result.approved()) {
-            // O pkg_tratada grava na Zona Tratada (o mesmo MERGE da carga) e marca o registro
-            // como REVALIDADO, nesta mesma transação. Relê o registro para trazer o que ele gravou.
-            gravarNaTratada(id);
-            entityManager.refresh(registro);
+        String status = resultado.path("status").asText();
+        if (STATUS_RECUSADO.equals(status)) {
+            throw new GravacaoNaoPermitidaException(resultado.path("mensagem").asText());
         }
-        return new RevalidationResponse(result.status(), result.errors(), registro);
-    }
-
-    /** Chama pkg_tratada.gravar_registro. As recusas do pacote (ORA-20010 a 20014) viram 409. */
-    private void gravarNaTratada(Long id) {
-        try {
-            jdbcTemplate.update("BEGIN pkg_tratada.gravar_registro(?); END;", id);
-        } catch (DataAccessException e) {
-            SQLException sql = sqlException(e);
-            if (sql != null && sql.getErrorCode() >= 20010 && sql.getErrorCode() <= 20014) {
-                throw new GravacaoNaoPermitidaException(mensagemDoPacote(sql.getMessage()));
-            }
-            throw e;
-        }
-    }
-
-    /** A SQLException com o código do Oracle. Fica no meio da cadeia: o driver ainda põe a dele embaixo. */
-    private static SQLException sqlException(Throwable erro) {
-        for (Throwable t = erro; t != null; t = t.getCause()) {
-            if (t instanceof SQLException sql) {
-                return sql;
-            }
-        }
-        return null;
-    }
-
-    /** "ORA-20014: Uma carga mais recente... (e as linhas ORA-06512)" → só o texto escrito pelo pacote. */
-    static String mensagemDoPacote(String mensagem) {
-        String primeiraLinha = mensagem.lines().findFirst().orElse(mensagem);
-        return primeiraLinha.replaceFirst("^ORA-\\d+:\\s*", "").trim();
-    }
-
-    /** Chama pkg_quality.revalidar_registro, que só valida e devolve o JSON, sem gravar. */
-    private RevalidationResponse callRevalidation(Long id) {
-        String json = jdbcTemplate.execute((ConnectionCallback<String>) con -> {
-            try (CallableStatement cs = con.prepareCall("{? = call pkg_quality.revalidar_registro(?)}")) {
-                cs.registerOutParameter(1, Types.CLOB);
-                cs.setLong(2, id);
-                cs.execute();
-                return cs.getString(1);
-            }
+        List<RevalidationError> erros = objectMapper.convertValue(resultado.path("erros"), new TypeReference<>() {});
+        // Relê o registro: quem gravou foi a DAG, em outra conexão.
+        RegistroQuarentena registro = transacao.execute(t -> {
+            RegistroQuarentena atual = buscarPorId(id);
+            entityManager.refresh(atual);
+            return atual;
         });
-        try {
-            return objectMapper.readValue(json, RevalidationResponse.class);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("JSON inválido do revalidar_registro: " + json, e);
-        }
+        return new RevalidationResponse(status, erros, registro);
     }
 }

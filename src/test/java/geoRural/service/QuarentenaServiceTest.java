@@ -1,5 +1,7 @@
 package geoRural.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oracle.bmc.objectstorage.ObjectStorage;
 import geoRural.dto.CorrecaoRequestDTO;
 import geoRural.dto.DescarteRequestDTO;
@@ -25,10 +27,15 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 /**
- * Contra o Oracle do docker-compose, com o pkg_quality de verdade. Cada teste é desfeito no
- * fim (@Transactional), e o revalidar_registro só usa SAVEPOINT, nunca COMMIT.
+ * Contra o Oracle do docker-compose. Cada teste é desfeito no fim (@Transactional). O "Revalidar"
+ * mesmo roda no Airflow (georural/revalidacao.py, com testes lá): aqui, a resposta da DAG é simulada.
  */
 @SpringBootTest
 @Transactional
@@ -39,6 +46,12 @@ class QuarentenaServiceTest {
     /** O cliente da OCI: evita exigir ~/.oci/config. */
     @MockitoBean
     private ObjectStorage objectStorage;
+
+    @MockitoBean
+    private AirflowClient airflow;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private QuarentenaService service;
@@ -82,51 +95,46 @@ class QuarentenaServiceTest {
     // ----- revalidar ------------------------------------------------------------
 
     @Test
-    void revalidarReprovadoMantemOStatus() {
+    void revalidarDisparaADagEDevolveOsErrosDela() throws Exception {
         long id = quarentena("{\"area_ha\": \"12.5\"}");
+        daDag("""
+                {"status": "REPROVADO", "mensagem": null, "erros": [{"tipo_erro": "CAMPO_OBRIGATORIO_AUSENTE",
+                 "campo": "cod_imovel", "motivo": "Campo obrigatório não informado.", "valor_recebido": null}]}""");
 
         RevalidationResponse resultado = service.revalidar(id);
 
         assertThat(resultado.status()).isEqualTo("REPROVADO");
         assertThat(resultado.errors()).extracting(RevalidationError::errorType)
                 .containsExactly("CAMPO_OBRIGATORIO_AUSENTE");
+        assertThat(resultado.errors().get(0).field()).isEqualTo("cod_imovel");
         assertThat(resultado.quarantine().getStatusAnalise()).isEqualTo("PENDENTE");
+        verify(airflow).executar("revalidar_registro", "revalidar", Map.of("quarentena_id", id));
     }
 
-    /** Aprovado: o pkg_tratada grava o imóvel na Tratada, na versão da carga, e encerra o registro. */
+    /** Aprovado: quem gravou foi a DAG, em outra conexão; o registro volta relido do banco. */
     @Test
-    void revalidarAprovadoGravaNaTratada() {
-        mapearGeometria();
-        jdbc.update("""
-                INSERT INTO dataset_versao (conjunto, versao, execucao_id, zona)
-                VALUES ('teste_quarentena', 1, ?, 'TRATADA')""", execucaoId);
-        long versaoId = jdbc.queryForObject(
-                "SELECT id FROM dataset_versao WHERE execucao_id = ?", Long.class, execucaoId);
-        long id = quarentenaComGeometria("{\"area_ha\": \"12.5\"}");
-        service.corrigir(id, new CorrecaoRequestDTO("{\"cod_imovel\": \"PR-TESTE-Q-001\"}", "Faltava o código."));
-        // Na tela são duas requisições; aqui é uma transação só, e o pacote lê do banco.
+    void revalidarAprovadoReleORegistro() throws Exception {
+        long id = quarentena("{\"cod_imovel\": \"PR-TESTE-Q-001\"}");
         repository.flush();
+        when(airflow.executar(eq("revalidar_registro"), eq("revalidar"), any())).thenAnswer(chamada -> {
+            jdbc.update("UPDATE registro_quarentena SET status_analise = 'REVALIDADO' WHERE id = ?", id);
+            return objectMapper.readTree("{\"status\": \"APROVADO\", \"erros\": [], \"mensagem\": null}");
+        });
 
         RevalidationResponse resultado = service.revalidar(id);
 
-        assertThat(resultado.status()).isEqualTo("APROVADO");
+        assertThat(resultado.approved()).isTrue();
         assertThat(resultado.errors()).isEmpty();
         assertThat(resultado.quarantine().getStatusAnalise()).isEqualTo("REVALIDADO");
-        assertThat(resultado.quarantine().getAnalisadoEm()).isNotNull();
-        assertThat(resultado.quarantine().getDatasetVersaoId()).isEqualTo(versaoId);
-        assertThat(jdbc.queryForMap(
-                "SELECT estado, dataset_versao_id FROM imovel_rural WHERE cod_imovel = 'PR-TESTE-Q-001'"))
-                .containsEntry("ESTADO", "PR")
-                .hasEntrySatisfying("DATASET_VERSAO_ID", v -> assertThat(((Number) v).longValue()).isEqualTo(versaoId));
     }
 
-    /** Aprovado na validação, mas a carga não criou versão: não há como gravar, e o registro não fecha. */
+    /** Recusado pela DAG (sem versão, carga mais nova...): 409 com a mensagem dela. */
     @Test
-    void revalidarAprovadoSemVersaoDeDadosRecusa() {
-        mapearGeometria();
-        long id = quarentenaComGeometria("{\"area_ha\": \"12.5\"}");
-        service.corrigir(id, new CorrecaoRequestDTO("{\"cod_imovel\": \"PR-TESTE-Q-002\"}", null));
-        repository.flush();
+    void revalidarRecusadoViraConflitoComAMensagem() throws Exception {
+        long id = quarentena("{}");
+        daDag("""
+                {"status": "RECUSADO", "erros": [],
+                 "mensagem": "A carga que trouxe o registro não criou versão de dados: não há versão para gravar."}""");
 
         assertThatThrownBy(() -> service.revalidar(id))
                 .isInstanceOf(GravacaoNaoPermitidaException.class)
@@ -134,13 +142,19 @@ class QuarentenaServiceTest {
     }
 
     @Test
-    void mensagemDoPacoteTiraOCodigoEAsLinhasDoOracle() {
-        assertThat(QuarentenaService.mensagemDoPacote(
-                "ORA-20014: Uma carga mais recente já atualizou.\nORA-06512: at \"GEO_RURAL.PKG_TRATADA\", line 230"))
-                .isEqualTo("Uma carga mais recente já atualizou.");
+    void registroEncerradoNemChamaADag() {
+        long id = quarentena("{}");
+        service.descartar(id, new DescarteRequestDTO("Sem salvação."));
+        repository.flush();
+
+        assertThatThrownBy(() -> service.revalidar(id)).isInstanceOf(QuarantineClosedException.class);
+        verifyNoInteractions(airflow);
     }
 
-    // ----- corrigir -------------------------------------------------------------
+    private void daDag(String json) throws Exception {
+        JsonNode resposta = objectMapper.readTree(json);
+        when(airflow.executar(eq("revalidar_registro"), eq("revalidar"), any())).thenReturn(resposta);
+    }
 
     @Test
     void corrigirGuardaOPayload() {
@@ -232,7 +246,7 @@ class QuarentenaServiceTest {
                 .hasMessageContaining("já é válida");
         assertThatThrownBy(() -> service.suggestGeometryFix(semGeometria))
                 .isInstanceOf(RequisicaoInvalidaException.class)
-                .hasMessageContaining("desenhe uma nova");
+                .hasMessageContaining("corrija pelo GeoJSON");
     }
 
     @Test
@@ -263,40 +277,18 @@ class QuarentenaServiceTest {
                 .hasMessageContaining("GeoJSON");
     }
 
-    /** O revalidar e o pkg_tratada usam a geometria corrigida no lugar da original. */
     @Test
-    void revalidarUsaAGeometriaCorrigida() {
-        mapearGeometria();
-        jdbc.update("""
-                INSERT INTO dataset_versao (conjunto, versao, execucao_id, zona)
-                VALUES ('teste_quarentena', 1, ?, 'TRATADA')""", execucaoId);
-        long id = quarentenaComGeometria("{\"cod_imovel\": \"PR-TESTE-Q-GEO\"}", BORBOLETA);
+    void erroDeTopologiaViraTextoComOPontoParaOMapa() {
+        var erro = new org.locationtech.jts.operation.valid.TopologyValidationError(
+                org.locationtech.jts.operation.valid.TopologyValidationError.SELF_INTERSECTION,
+                new org.locationtech.jts.geom.Coordinate(-49.25, -25.42));
 
-        assertThat(service.revalidar(id).errors()).extracting(RevalidationError::errorType)
-                .containsExactly("GEOMETRIA_INVALIDA");
-
-        service.saveCorrectedGeometry(id, new GeometryCorrectionRequest(QUADRADO, null));
-        repository.flush();
-        RevalidationResponse resultado = service.revalidar(id);
-
-        assertThat(resultado.status()).isEqualTo("APROVADO");
-        assertThat(resultado.quarantine().getStatusAnalise()).isEqualTo("REVALIDADO");
-        assertThat(jdbc.queryForObject("""
-                SELECT pkg_quality.validate_geometry(geometria) FROM imovel_rural
-                 WHERE cod_imovel = 'PR-TESTE-Q-GEO'""", String.class)).isEqualTo("TRUE");
-    }
-
-    @Test
-    void validacaoDoOracleViraTextoParaATela() {
-        assertThat(QuarentenaService.describeOracleValidation("13349 [Element <1>] [Ring <1>]"))
-                .startsWith("o contorno do polígono se cruza");
-        assertThat(QuarentenaService.describeOracleValidation("13999"))
-                .isEqualTo("erro de geometria do Oracle (13999).");
+        assertThat(QuarentenaService.descreverErro(erro)).isEqualTo("o contorno do polígono se cruza [-49.25 -25.42].");
     }
 
     // ----- montagem -------------------------------------------------------------
 
-    /** Polígono em "laço" (as arestas se cruzam): GEOMETRIA_INVALIDA, código 13349. */
+    /** Polígono em "laço" (as arestas se cruzam): inválido no JTS e no Shapely. */
     private static final String BORBOLETA = """
             SDO_GEOMETRY(2003, 4326, NULL, SDO_ELEM_INFO_ARRAY(1, 1003, 1),
               SDO_ORDINATE_ARRAY(-49.25, -25.42, -49.20, -25.42, -49.20, -25.48, -49.26, -25.40, -49.25, -25.42))""";
@@ -310,17 +302,6 @@ class QuarentenaServiceTest {
                 INSERT INTO registro_quarentena (execucao_id, numero_linha, motivo, payload)
                 VALUES (?, 1, 'teste da quarentena', ?)""", execucaoId, payload);
         return ultimaQuarentena();
-    }
-
-    /** O imovel_rural exige geometria: sem ela no mapeamento, nada grava na Tratada. */
-    private void mapearGeometria() {
-        jdbc.update("INSERT INTO fonte_coluna (fonte_id, nome_coluna) VALUES (?, 'geometry')", fonteId);
-        jdbc.update("""
-                INSERT INTO regra_campo
-                  (fonte_id, fonte_coluna_id, destino_tabela, campo_destino, tipo_dado, obrigatorio,
-                   politica_geometria, recortar_pr)
-                SELECT ?, id, 'imovel_rural', 'geometria', 'GEOMETRIA', 1, 'QUARENTENA', 0
-                  FROM fonte_coluna WHERE fonte_id = ? AND nome_coluna = 'geometry'""", fonteId, fonteId);
     }
 
     private long quarentenaComGeometria(String payload) {
