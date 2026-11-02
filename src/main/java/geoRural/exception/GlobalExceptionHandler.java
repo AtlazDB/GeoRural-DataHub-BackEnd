@@ -41,6 +41,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
+    @ExceptionHandler(AirflowIndisponivelException.class)
+    public ResponseEntity<ErroResponse> handleAirflowIndisponivel(AirflowIndisponivelException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ErroResponse.de(ex.getMessage()));
+    }
+
     @ExceptionHandler(GravacaoNaoPermitidaException.class)
     public ResponseEntity<ErroResponse> handleGravacaoNaoPermitida(GravacaoNaoPermitidaException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
