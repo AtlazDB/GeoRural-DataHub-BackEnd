@@ -200,7 +200,8 @@ public class QuarentenaService {
         long descartados = repository.countByStatusAnalise("DESCARTADO");
         long revalidados = repository.countByStatusAnalise("REVALIDADO");
         long substituidos = repository.countByStatusAnalise("SUBSTITUIDO");
-        long total = repository.count();
+        // Substituído é histórico: uma carga nova encerrou o registro, e ele não está mais retido.
+        long total = pendentes + emAnalise + corrigidos + descartados + revalidados;
 
         return new QuarentenaMetricasDTO(pendentes, emAnalise, corrigidos, descartados, revalidados,
                 substituidos, total);

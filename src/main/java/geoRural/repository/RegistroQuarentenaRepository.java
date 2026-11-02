@@ -14,7 +14,7 @@ public interface RegistroQuarentenaRepository extends JpaRepository<RegistroQuar
     @Query("""
         SELECT q FROM RegistroQuarentena q 
         WHERE (:tipoErro IS NULL OR q.tipoErro = :tipoErro)
-          AND (:status IS NULL OR q.statusAnalise = :status)
+          AND ((:status IS NULL AND q.statusAnalise <> 'SUBSTITUIDO') OR q.statusAnalise = :status)
           AND (:texto IS NULL OR LOWER(q.chaveNatural) LIKE LOWER(CONCAT('%', :texto, '%')) 
                OR LOWER(q.valorRecebido) LIKE LOWER(CONCAT('%', :texto, '%')))
           AND (:fonteId IS NULL OR q.execucaoId IN (
