@@ -19,9 +19,10 @@ import java.time.Duration;
 import java.util.Map;
 
 /**
- * A API REST do Airflow (v2): dispara uma DAG, espera terminar e lê o que a tarefa devolveu (XCom).
- * É o caminho do "Revalidar" da quarentena: a regra fica em um lugar só (no Airflow), e a tela
- * recebe a resposta na hora, em uns 3 segundos.
+ * A API REST do Airflow (v2). Nenhuma DAG roda por agendamento: cada execução tem custo, então
+ * são os botões da tela que disparam. Upload, "Processar" e "Executar" só disparam ({@link #disparar}),
+ * e o andamento aparece depois. O "Revalidar" da quarentena dispara e espera ({@link #executar}): a
+ * regra fica em um lugar só (no Airflow), e a tela recebe a resposta na hora, em uns 3 segundos.
  *
  * Com usuário e senha configurados, pede um token em /auth/token (o Airflow da VM). Sem eles, chama
  * sem token: o Airflow local da equipe roda sem login.
@@ -54,15 +55,17 @@ public class AirflowClient {
         this.espera = Duration.ofSeconds(esperaSegundos);
     }
 
+    /** Dispara a DAG com `conf` e volta logo: não espera a execução terminar. */
+    public void disparar(String dagId, Map<String, Object> conf) {
+        disparar(dagId, conf, token());
+    }
+
     /** Dispara a DAG com `conf`, espera terminar e devolve o que a tarefa retornou. */
     public JsonNode executar(String dagId, String tarefa, Map<String, Object> conf) {
         String token = token();
-        ObjectNode corpo = objectMapper.createObjectNode();
-        corpo.putNull("logical_date");
-        corpo.set("conf", objectMapper.valueToTree(conf));
-        String base = "/api/v2/dags/" + dagId + "/dagRuns";
-        String execucao = pedir("POST", base, corpo.toString(), token).path("dag_run_id").asText();
-        String caminho = base + "/" + URLEncoder.encode(execucao, StandardCharsets.UTF_8).replace("+", "%20");
+        String execucao = disparar(dagId, conf, token);
+        String caminho = "/api/v2/dags/" + dagId + "/dagRuns/"
+                + URLEncoder.encode(execucao, StandardCharsets.UTF_8).replace("+", "%20");
 
         long limite = System.nanoTime() + espera.toNanos();
         String estado = pedir("GET", caminho, null, token).path("state").asText();
@@ -79,6 +82,17 @@ public class AirflowClient {
         }
         return pedir("GET", caminho + "/taskInstances/" + tarefa + "/xcomEntries/return_value?deserialize=true",
                 null, token).path("value");
+    }
+
+    private String disparar(String dagId, Map<String, Object> conf, String token) {
+        // DAG pausada aceita o disparo e a execução fica na fila para sempre: melhor avisar agora.
+        if (pedir("GET", "/api/v2/dags/" + dagId, null, token).path("is_paused").asBoolean()) {
+            throw new AirflowIndisponivelException("A DAG " + dagId + " está pausada no Airflow: ative-a e tente de novo.");
+        }
+        ObjectNode corpo = objectMapper.createObjectNode();
+        corpo.putNull("logical_date");
+        corpo.set("conf", objectMapper.valueToTree(conf));
+        return pedir("POST", "/api/v2/dags/" + dagId + "/dagRuns", corpo.toString(), token).path("dag_run_id").asText();
     }
 
     private String token() {

@@ -32,6 +32,7 @@ class AirflowClientTest {
     private final List<String> tokens = Collections.synchronizedList(new ArrayList<>());
     private final AtomicInteger consultas = new AtomicInteger();
     private volatile String estadoFinal = "success";
+    private volatile boolean pausada = false;
     private HttpServer servidor;
     private String base;
 
@@ -39,6 +40,8 @@ class AirflowClientTest {
     void subirServidor() throws IOException {
         servidor = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         servidor.createContext("/auth/token", troca -> responder(troca, 200, "{\"access_token\": \"abc\"}"));
+        servidor.createContext("/api/v2/dags/revalidar_registro", troca ->
+                responder(troca, 200, "{\"is_paused\": " + pausada + "}"));
         servidor.createContext(DAG_RUNS, troca -> {
             tokens.add(troca.getRequestHeaders().getFirst("Authorization"));
             String caminho = troca.getRequestURI().getRawPath();
@@ -61,6 +64,23 @@ class AirflowClientTest {
     @AfterEach
     void derrubarServidor() {
         servidor.stop(0);
+    }
+
+    @Test
+    void dispararNaoEsperaTerminar() {
+        cliente("", 30).disparar("revalidar_registro", Map.of("quarentena_id", 7));
+
+        assertThat(corpos).hasSize(1);
+        assertThat(consultas.get()).isZero();
+    }
+
+    @Test
+    void dagPausadaNaoEDisparada() {
+        pausada = true;
+
+        assertThatThrownBy(() -> cliente("", 30).disparar("revalidar_registro", Map.of("quarentena_id", 7)))
+                .isInstanceOf(AirflowIndisponivelException.class).hasMessageContaining("pausada");
+        assertThat(corpos).isEmpty();
     }
 
     @Test
