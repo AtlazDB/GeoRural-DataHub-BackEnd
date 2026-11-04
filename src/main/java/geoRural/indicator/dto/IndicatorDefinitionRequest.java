@@ -23,6 +23,6 @@ public record IndicatorDefinitionRequest (
         @NotNull Long fonteId,
         @NotBlank String calculationModel,
         Map<String, Object> parameters,
-        @NotEmpty @Valid List<StatusRangeRequest> ranges
+        @NotEmpty List<@Valid StatusRangeRequest> ranges
 ) {
 }

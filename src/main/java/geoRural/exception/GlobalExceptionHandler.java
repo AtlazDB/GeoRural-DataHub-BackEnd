@@ -4,10 +4,15 @@ import geoRural.dto.ErroResponse;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+
+import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -81,6 +86,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RequisicaoInvalidaException.class)
     public ResponseEntity<ErroResponse> handleRequisicaoInvalida(RequisicaoInvalidaException ex) {
         return ResponseEntity.badRequest().body(new ErroResponse(ex.getMessage(), ex.getCampos()));
+    }
+
+    /** Campos que falharam no @Valid (ex.: @NotBlank, @Size), no mesmo formato da RequisicaoInvalidaException. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErroResponse> handleCamposInvalidos(MethodArgumentNotValidException ex) {
+        // "ranges[1].status" vira "ranges": a tela marca o campo de cima
+        List<String> campos = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getField)
+                .map(campo -> campo.split("[.\\[]")[0])
+                .distinct()
+                .toList();
+        return ResponseEntity.badRequest()
+                .body(new ErroResponse("Preencha corretamente: " + String.join(", ", campos) + ".", campos));
+    }
+
+    /** JSON que nem dá para ler (ex.: texto onde vai número). */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErroResponse> handleCorpoIlegivel(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(ErroResponse.de("O corpo da requisição não é um JSON válido."));
     }
 
     @ExceptionHandler(FormatoArquivoNaoAceitoException.class)
