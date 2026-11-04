@@ -60,4 +60,15 @@ public class IndicatorDefinitionController {
     public void deactivate(@PathVariable String code) {
         service.deactivate(code);
     }
+
+    /**
+     * 202 · 400 desativado ou modelo ainda sem cálculo · 404 · 503 Airflow fora do ar.
+     * Só dispara a DAG calcular_indicador: os resultados aparecem quando ela termina.
+     */
+    @Operation(summary = "Calcula o indicador para todos os imóveis (dispara a DAG no Airflow)")
+    @PostMapping("/{code}/calculate")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void calculate(@PathVariable String code) {
+        service.calculate(code);
+    }
 }

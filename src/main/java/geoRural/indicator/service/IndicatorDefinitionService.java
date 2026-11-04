@@ -13,4 +13,7 @@ public interface IndicatorDefinitionService {
     IndicatorDefinitionResponse findByCode(String code);
 
     void deactivate(String code);
+
+    /** Dispara a DAG calcular_indicador no Airflow e volta logo (o cálculo leva minutos). */
+    void calculate(String code);
 }

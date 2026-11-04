@@ -2,6 +2,7 @@ package geoRural.indicator.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
@@ -141,6 +142,33 @@ class IndicatorDefinitionControllerTest {
 
         mockMvc.perform(post("/api/v1/indicators/NADA/deactivate"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void calculateRespondsAccepted() throws Exception {
+        mockMvc.perform(post("/api/v1/indicators/DFOCO/calculate"))
+                .andExpect(status().isAccepted());
+
+        verify(service).calculate("DFOCO");
+    }
+
+    @Test
+    void calculateDeactivatedRespondsBadRequest() throws Exception {
+        doThrow(new RequisicaoInvalidaException("O indicador \"DFOCO\" está desativado e não é mais calculado."))
+                .when(service).calculate("DFOCO");
+
+        Map<String, Object> resposta = body(post("/api/v1/indicators/DFOCO/calculate"), status().isBadRequest());
+
+        assertThat(resposta).containsEntry("mensagem", "O indicador \"DFOCO\" está desativado e não é mais calculado.");
+    }
+
+    @Test
+    void calculateWithAirflowDownRespondsServiceUnavailable() throws Exception {
+        doThrow(new AirflowIndisponivelException("A DAG calcular_indicador está pausada no Airflow: ative-a e tente de novo."))
+                .when(service).calculate("DFOCO");
+
+        mockMvc.perform(post("/api/v1/indicators/DFOCO/calculate"))
+                .andExpect(status().isServiceUnavailable());
     }
 
     private Map<String, Object> body(
