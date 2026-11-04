@@ -8,6 +8,7 @@ import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
 import geoRural.indicator.repository.IndicatorDefinitionRepository;
 import geoRural.repository.FonteRepository;
+import geoRural.service.AirflowClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -32,8 +35,9 @@ class IndicatorDefinitionServiceTest {
 
     private final IndicatorDefinitionRepository repository = mock(IndicatorDefinitionRepository.class);
     private final FonteRepository fonteRepository = mock(FonteRepository.class);
+    private final AirflowClient airflow = mock(AirflowClient.class);
     private final IndicatorDefinitionService service =
-            new IndicatorDefinitionServiceImpl(repository, fonteRepository);
+            new IndicatorDefinitionServiceImpl(repository, fonteRepository, airflow);
 
     @BeforeEach
     void sourceWithPoints() {
@@ -221,6 +225,50 @@ class IndicatorDefinitionServiceTest {
 
         assertThatThrownBy(() -> service.deactivate("NADA"))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ---- calcular (US13.T06)
+
+    @Test
+    void calculateTriggersTheDagWithTheCode() {
+        service.calculate("DFOCO");
+
+        verify(airflow).disparar("calcular_indicador", Map.of("code", "DFOCO"));
+    }
+
+    @Test
+    void calculateMissingThrowsNotFound() {
+        when(repository.findByCode("NADA")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.calculate("NADA"))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(airflow, never()).disparar(anyString(), anyMap());
+    }
+
+    @Test
+    void calculateRefusesDeactivatedIndicator() {
+        IndicatorDefinitionResponse ativo = saved("DFOCO");
+        when(repository.findByCode("DFOCO")).thenReturn(Optional.of(new IndicatorDefinitionResponse(
+                ativo.code(), ativo.name(), ativo.unit(), ativo.description(), ativo.fonteId(),
+                ativo.calculationModel(), ativo.parameters(), ativo.ranges(), false, ativo.createdAt())));
+
+        assertThatThrownBy(() -> service.calculate("DFOCO"))
+                .isInstanceOf(RequisicaoInvalidaException.class)
+                .hasMessageContaining("desativado");
+        verify(airflow, never()).disparar(anyString(), anyMap());
+    }
+
+    @Test
+    void calculateRefusesAreaCoverageUntilT07() {
+        IndicatorDefinitionResponse ativo = saved("DCOB");
+        when(repository.findByCode("DCOB")).thenReturn(Optional.of(new IndicatorDefinitionResponse(
+                "DCOB", ativo.name(), ativo.unit(), ativo.description(), ativo.fonteId(),
+                "AREA_COVERAGE", ativo.parameters(), ativo.ranges(), true, ativo.createdAt())));
+
+        assertThatThrownBy(() -> service.calculate("DCOB"))
+                .isInstanceOf(RequisicaoInvalidaException.class)
+                .hasMessageContaining("AREA_COVERAGE");
+        verify(airflow, never()).disparar(anyString(), anyMap());
     }
 
     // ---- montagem dos dados de teste

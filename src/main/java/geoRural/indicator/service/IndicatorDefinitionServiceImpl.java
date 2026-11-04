@@ -8,11 +8,13 @@ import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
 import geoRural.indicator.repository.IndicatorDefinitionRepository;
 import geoRural.repository.FonteRepository;
+import geoRural.service.AirflowClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -27,14 +29,19 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
     private static final Set<Integer> POINTS = Set.of(1, 5);
     private static final Set<Integer> POLYGONS = Set.of(3, 7);
     private static final Set<String> STATUSES = Set.of("CONFORME", "ALERTA", "CRITICO", "VALIDACAO");
+    // O cálculo é do Airflow (GeoPandas): dags/calcular_indicador.py
+    private static final String DAG_CALCULATE = "calcular_indicador";
 
     private final IndicatorDefinitionRepository repository;
     private final FonteRepository fonteRepository;
+    private final AirflowClient airflow;
 
     public IndicatorDefinitionServiceImpl(IndicatorDefinitionRepository repository,
-                                          FonteRepository fonteRepository) {
+                                          FonteRepository fonteRepository,
+                                          AirflowClient airflow) {
         this.repository = repository;
         this.fonteRepository = fonteRepository;
+        this.airflow = airflow;
     }
 
     @Override
@@ -64,6 +71,20 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
         if (!repository.deactivate(code)) {
             throw new ResourceNotFoundException("Indicador \"" + code + "\" não encontrado.");
         }
+    }
+
+    @Override
+    public void calculate(String code) {
+        IndicatorDefinitionResponse indicator = findByCode(code);
+        if (!indicator.active()) {
+            throw new RequisicaoInvalidaException("O indicador \"" + code + "\" está desativado e não é mais calculado.");
+        }
+        if (!POINT_DENSITY.equals(indicator.calculationModel())) {
+            // AREA_COVERAGE entra na US13.T07
+            throw new RequisicaoInvalidaException(
+                    "O cálculo de " + indicator.calculationModel() + " ainda não está disponível.");
+        }
+        airflow.disparar(DAG_CALCULATE, Map.of("code", code));
     }
 
     private void validateCode(String code) {
