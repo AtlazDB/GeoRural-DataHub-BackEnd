@@ -7,6 +7,7 @@ import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
+import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
 import geoRural.indicator.service.IndicatorDefinitionService;
@@ -169,6 +170,44 @@ class IndicatorDefinitionControllerTest {
 
         mockMvc.perform(post("/api/v1/indicators/DFOCO/calculate"))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    // ---- resultado (US13.T08)
+
+    @Test
+    void findLatestResultRespondsOkWithTheResult() throws Exception {
+        when(service.findLatestResult("DFOCO", "SP-1")).thenReturn(new IndicatorResultResponse("DFOCO", "SP-1",
+                new BigDecimal("19.9005"), "ALERTA", new BigDecimal("2"), null,
+                OffsetDateTime.parse("2026-11-05T12:00:00Z")));
+
+        Map<String, Object> resposta = body(get("/api/v1/indicators/DFOCO/results").param("codImovel", "SP-1"),
+                status().isOk());
+
+        assertThat(resposta)
+                .containsEntry("indicatorCode", "DFOCO")
+                .containsEntry("codImovel", "SP-1")
+                .containsEntry("status", "ALERTA")
+                .containsEntry("value", 19.9005)
+                .containsEntry("areaImovelHa", null);
+    }
+
+    @Test
+    void findLatestResultNotCalculatedRespondsNotFound() throws Exception {
+        when(service.findLatestResult("DFOCO", "SP-1")).thenThrow(new ResourceNotFoundException(
+                "O indicador \"DFOCO\" ainda não foi calculado para o imóvel SP-1."));
+
+        Map<String, Object> resposta = body(get("/api/v1/indicators/DFOCO/results").param("codImovel", "SP-1"),
+                status().isNotFound());
+
+        assertThat(resposta).containsEntry("mensagem", "O indicador \"DFOCO\" ainda não foi calculado para o imóvel SP-1.");
+    }
+
+    @Test
+    void findLatestResultWithoutCodImovelRespondsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/indicators/DFOCO/results"))
+                .andExpect(status().isBadRequest());
+
+        verify(service, never()).findLatestResult(any(), any());
     }
 
     private Map<String, Object> body(
