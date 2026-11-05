@@ -1,15 +1,12 @@
 package geoRural.repository;
 
-import java.sql.CallableStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -22,8 +19,9 @@ import geoRural.dto.RegraCalculoResponse;
 import geoRural.dto.VersaoDadosResponse;
 
 /**
- * Indicadores em SQL direto: o cálculo é do pkg_indicadores, e a leitura junta seis tabelas para
- * montar o caminho até a origem (regra, versões, execuções, arquivos e fontes) de uma vez só.
+ * Leitura dos indicadores em SQL direto: junta seis tabelas para montar o caminho até a origem
+ * (regra, versões, execuções, arquivos e fontes) de uma vez só. O cálculo é da DAG
+ * calcular_indicadores no Airflow (georural/irl_ifc.py).
  */
 @Repository
 public class IndicadorRepository {
@@ -66,16 +64,6 @@ public class IndicadorRepository {
         this.objectMapper = objectMapper;
     }
 
-    /** Roda pkg_indicadores.calcular_irl na transação de quem chamou. Devolve quantos gravou. */
-    public int calcularIrl() {
-        return chamar("{? = call pkg_indicadores.calcular_irl()}");
-    }
-
-    /** Roda pkg_indicadores.calcular_ifc com a janela contada a partir de agora (UTC). */
-    public int calcularIfc() {
-        return chamar("{? = call pkg_indicadores.calcular_ifc()}");
-    }
-
     /** O valor mais recente de cada indicador do imóvel. */
     public List<IndicadorResponse> buscarAtuais(String codImovel) {
         return jdbc.query("SELECT * FROM (" + SQL_INDICADORES + ") WHERE rn = 1 ORDER BY indicador",
@@ -96,17 +84,6 @@ public class IndicadorRepository {
                 """, (rs, n) -> new RegraVigente(rs.getLong("id"), rs.getString("codigo"),
                         rs.getInt("versao"), parametros(rs.getString("parametros"))), indicador)
                 .stream().findFirst();
-    }
-
-    private int chamar(String chamada) {
-        Integer gravados = jdbc.execute((ConnectionCallback<Integer>) con -> {
-            try (CallableStatement cs = con.prepareCall(chamada)) {
-                cs.registerOutParameter(1, Types.NUMERIC);
-                cs.execute();
-                return cs.getInt(1);
-            }
-        });
-        return gravados == null ? 0 : gravados;
     }
 
     private IndicadorResponse mapear(ResultSet rs) throws SQLException {
