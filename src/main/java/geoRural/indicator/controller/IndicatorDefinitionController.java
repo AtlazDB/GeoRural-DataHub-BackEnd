@@ -2,6 +2,7 @@ package geoRural.indicator.controller;
 
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
+import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.service.IndicatorDefinitionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -70,5 +72,16 @@ public class IndicatorDefinitionController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     public void calculate(@PathVariable String code) {
         service.calculate(code);
+    }
+
+    /**
+     * 200 · 400 sem codImovel · 404 indicador não existe ou ainda não calculado para o imóvel.
+     * Devolve o resultado do imóvel como ele está publicado na imovel_rural.
+     */
+    @Operation(summary = "Resultado do indicador para um imóvel")
+    @GetMapping("/{code}/results")
+    public IndicatorResultResponse findLatestResult(@PathVariable String code,
+                                                    @RequestParam String codImovel) {
+        return service.findLatestResult(code, codImovel);
     }
 }

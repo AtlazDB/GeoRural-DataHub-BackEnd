@@ -4,9 +4,11 @@ import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
+import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
 import geoRural.indicator.repository.IndicatorDefinitionRepository;
+import geoRural.indicator.repository.IndicatorResultRepository;
 import geoRural.repository.FonteRepository;
 import geoRural.service.AirflowClient;
 import org.springframework.stereotype.Service;
@@ -33,13 +35,16 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
     private static final String DAG_CALCULATE = "calcular_indicador";
 
     private final IndicatorDefinitionRepository repository;
+    private final IndicatorResultRepository resultRepository;
     private final FonteRepository fonteRepository;
     private final AirflowClient airflow;
 
     public IndicatorDefinitionServiceImpl(IndicatorDefinitionRepository repository,
+                                          IndicatorResultRepository resultRepository,
                                           FonteRepository fonteRepository,
                                           AirflowClient airflow) {
         this.repository = repository;
+        this.resultRepository = resultRepository;
         this.fonteRepository = fonteRepository;
         this.airflow = airflow;
     }
@@ -83,6 +88,15 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
         airflow.disparar(DAG_CALCULATE, Map.of("code", code));
     }
 
+    @Override
+    public IndicatorResultResponse findLatestResult(String code, String codImovel) {
+        // Primeiro o indicador: assim o 404 diz se o problema é a sigla ou o imóvel.
+        findByCode(code);
+        return resultRepository.findLatest(code, codImovel)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "O indicador \"" + code + "\" ainda não foi calculado para o imóvel " + codImovel + "."));
+    }
+
     private void validateCode(String code) {
         if (!CODE.matcher(code).matches()) {
             throw new RequisicaoInvalidaException(
@@ -117,9 +131,6 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
                     List.of("calculationModel"));
         }
     }
-
-     // Faixas em ordem crescente de limite; só a última fica sem limite (vale para tudo acima
-     // da anterior). Ex.: [{CONFORME, 10, true}, {ALERTA, 20, false}, {CRITICO}].
 
     private void validateRanges(List<StatusRangeRequest> ranges) {
         BigDecimal previous = null;

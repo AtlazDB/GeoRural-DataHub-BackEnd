@@ -6,7 +6,9 @@ import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
 import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
+import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.repository.IndicatorDefinitionRepository;
+import geoRural.indicator.repository.IndicatorResultRepository;
 import geoRural.repository.FonteRepository;
 import geoRural.service.AirflowClient;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,10 +36,11 @@ class IndicatorDefinitionServiceTest {
     private static final long SOURCE = 7L;
 
     private final IndicatorDefinitionRepository repository = mock(IndicatorDefinitionRepository.class);
+    private final IndicatorResultRepository resultRepository = mock(IndicatorResultRepository.class);
     private final FonteRepository fonteRepository = mock(FonteRepository.class);
     private final AirflowClient airflow = mock(AirflowClient.class);
     private final IndicatorDefinitionService service =
-            new IndicatorDefinitionServiceImpl(repository, fonteRepository, airflow);
+            new IndicatorDefinitionServiceImpl(repository, resultRepository, fonteRepository, airflow);
 
     @BeforeEach
     void sourceWithPoints() {
@@ -268,6 +271,36 @@ class IndicatorDefinitionServiceTest {
         service.calculate("DCOB");
 
         verify(airflow).disparar("calcular_indicador", Map.of("code", "DCOB"));
+    }
+
+    // ---- resultado (US13.T08)
+
+    @Test
+    void findLatestResultReturnsWhatTheRepositoryFound() {
+        IndicatorResultResponse result = new IndicatorResultResponse("DFOCO", "SP-1", new BigDecimal("19.9005"),
+                "ALERTA", new BigDecimal("2"), null, OffsetDateTime.parse("2026-11-05T12:00:00Z"));
+        when(resultRepository.findLatest("DFOCO", "SP-1")).thenReturn(Optional.of(result));
+
+        assertThat(service.findLatestResult("DFOCO", "SP-1")).isEqualTo(result);
+    }
+
+    @Test
+    void findLatestResultOfMissingIndicatorThrowsNotFoundWithoutReadingResults() {
+        when(repository.findByCode("NADA")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.findLatestResult("NADA", "SP-1"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("não encontrado");
+        verify(resultRepository, never()).findLatest(anyString(), anyString());
+    }
+
+    @Test
+    void findLatestResultNotCalculatedYetThrowsNotFound() {
+        when(resultRepository.findLatest("DFOCO", "SP-1")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.findLatestResult("DFOCO", "SP-1"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("ainda não foi calculado");
     }
 
     // ---- montagem dos dados de teste
