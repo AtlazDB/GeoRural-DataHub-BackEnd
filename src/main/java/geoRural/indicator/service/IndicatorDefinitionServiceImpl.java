@@ -79,11 +79,7 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
         if (!indicator.active()) {
             throw new RequisicaoInvalidaException("O indicador \"" + code + "\" está desativado e não é mais calculado.");
         }
-        if (!POINT_DENSITY.equals(indicator.calculationModel())) {
-            // AREA_COVERAGE entra na US13.T07
-            throw new RequisicaoInvalidaException(
-                    "O cálculo de " + indicator.calculationModel() + " ainda não está disponível.");
-        }
+        // Os dois modelos (POINT_DENSITY e AREA_COVERAGE) são calculados pela mesma DAG.
         airflow.disparar(DAG_CALCULATE, Map.of("code", code));
     }
 
