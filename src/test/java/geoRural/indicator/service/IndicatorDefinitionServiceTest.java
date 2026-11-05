@@ -259,16 +259,15 @@ class IndicatorDefinitionServiceTest {
     }
 
     @Test
-    void calculateRefusesAreaCoverageUntilT07() {
+    void calculateAreaCoverageTriggersTheSameDag() {
         IndicatorDefinitionResponse ativo = saved("DCOB");
         when(repository.findByCode("DCOB")).thenReturn(Optional.of(new IndicatorDefinitionResponse(
                 "DCOB", ativo.name(), ativo.unit(), ativo.description(), ativo.fonteId(),
                 "AREA_COVERAGE", ativo.parameters(), ativo.ranges(), true, ativo.createdAt())));
 
-        assertThatThrownBy(() -> service.calculate("DCOB"))
-                .isInstanceOf(RequisicaoInvalidaException.class)
-                .hasMessageContaining("AREA_COVERAGE");
-        verify(airflow, never()).disparar(anyString(), anyMap());
+        service.calculate("DCOB");
+
+        verify(airflow).disparar("calcular_indicador", Map.of("code", "DCOB"));
     }
 
     // ---- montagem dos dados de teste
