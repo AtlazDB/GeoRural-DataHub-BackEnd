@@ -18,7 +18,7 @@ import geoRural.repository.IndicadorRepository;
 public class IndicadorServiceImpl implements IndicadorService {
 
     static final List<String> INDICADORES_CALCULADOS = List.of("IRL", "IFC");
-    // O cálculo é do Airflow (GeoPandas): dags/calcular_indicadores.py, no lugar do pkg_indicadores.
+    // O cálculo é do Airflow (GeoPandas): dags/calcular_indicadores.py (o pkg_indicadores saiu na V24).
     static final String DAG_CALCULAR = "calcular_indicadores";
 
     private final IndicadorRepository repository;
