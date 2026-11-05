@@ -1,13 +1,12 @@
 package geoRural.service;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import geoRural.dto.CalculoIndicadoresResponse;
 import geoRural.dto.IndicadorResponse;
 import geoRural.dto.IndicadoresImovelResponse;
 import geoRural.exception.ImovelNaoEncontradoException;
@@ -19,22 +18,23 @@ import geoRural.repository.IndicadorRepository;
 public class IndicadorServiceImpl implements IndicadorService {
 
     static final List<String> INDICADORES_CALCULADOS = List.of("IRL", "IFC");
+    // O cálculo é do Airflow (GeoPandas): dags/calcular_indicadores.py, no lugar do pkg_indicadores.
+    static final String DAG_CALCULAR = "calcular_indicadores";
 
     private final IndicadorRepository repository;
     private final ImovelRuralRepository imovelRepository;
+    private final AirflowClient airflow;
 
-    public IndicadorServiceImpl(IndicadorRepository repository, ImovelRuralRepository imovelRepository) {
+    public IndicadorServiceImpl(IndicadorRepository repository, ImovelRuralRepository imovelRepository,
+                                AirflowClient airflow) {
         this.repository = repository;
         this.imovelRepository = imovelRepository;
+        this.airflow = airflow;
     }
 
-    // Os dois na mesma transação: ou a rodada inteira fica gravada, ou nenhuma parte dela.
     @Override
-    @Transactional
-    public CalculoIndicadoresResponse calcular() {
-        int irl = repository.calcularIrl();
-        int ifc = repository.calcularIfc();
-        return new CalculoIndicadoresResponse(irl, ifc, OffsetDateTime.now());
+    public void calcular() {
+        airflow.disparar(DAG_CALCULAR, Map.of());
     }
 
     @Override

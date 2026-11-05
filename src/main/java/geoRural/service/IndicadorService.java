@@ -1,6 +1,5 @@
 package geoRural.service;
 
-import geoRural.dto.CalculoIndicadoresResponse;
 import geoRural.dto.IndicadorResponse;
 import geoRural.dto.IndicadoresImovelResponse;
 
@@ -8,8 +7,11 @@ import java.util.List;
 
 public interface IndicadorService {
 
-    /** Recalcula IRL e IFC de todos os imóveis com dados para isso. */
-    CalculoIndicadoresResponse calcular();
+    /**
+     * Dispara o recálculo do IRL e do IFC de todos os imóveis (DAG calcular_indicadores no Airflow)
+     * e volta logo: o cálculo leva alguns minutos, e os valores novos aparecem quando ele termina.
+     */
+    void calcular();
 
     IndicadoresImovelResponse buscarPorImovel(String codImovel);
 
