@@ -7,5 +7,135 @@
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": false,
-  "accessTokenLifespan": 900
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      {
+        "name": "OPERADOR_DADOS",
+        "description": "Operador de Dados: cadastra fontes, mapeia colunas e trata a quarentena"
+      },
+      {
+        "name": "ANALISTA",
+        "description": "Analista: consulta o mapa, os imoveis e os indicadores ambientais"
+      },
+      {
+        "name": "AUDITOR",
+        "description": "Auditor: consulta historico de versoes e rastreabilidade"
+      },
+      {
+        "name": "GESTOR",
+        "description": "Gestor: acompanha a operacao e administra perfis"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "georural-frontend",
+      "name": "GeoRural DataHub (front-end Vue)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      }
+    },
+    {
+      "clientId": "georural-backend",
+      "name": "GeoRural DataHub (API Spring)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true
+    }
+  ],
+  "users": [
+    {
+      "username": "operador",
+      "email": "operador@georural.local",
+      "firstName": "Operador",
+      "lastName": "de Dados",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "georural123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-georural",
+        "OPERADOR_DADOS"
+      ]
+    },
+    {
+      "username": "analista",
+      "email": "analista@georural.local",
+      "firstName": "Analista",
+      "lastName": "Ambiental",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "georural123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-georural",
+        "ANALISTA"
+      ]
+    },
+    {
+      "username": "auditor",
+      "email": "auditor@georural.local",
+      "firstName": "Auditor",
+      "lastName": "de Dados",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "georural123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-georural",
+        "AUDITOR"
+      ]
+    },
+    {
+      "username": "gestor",
+      "email": "gestor@georural.local",
+      "firstName": "Gestor",
+      "lastName": "do Projeto",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "georural123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "default-roles-georural",
+        "GESTOR"
+      ]
+    }
+  ]
 }
