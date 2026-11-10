@@ -1,0 +1,11 @@
+{
+  "realm": "georural",
+  "displayName": "GeoRural DataHub",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "accessTokenLifespan": 900
+}

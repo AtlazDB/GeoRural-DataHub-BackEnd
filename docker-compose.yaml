@@ -11,5 +11,24 @@ services:
     volumes:
       - oracle-data:/opt/oracle/oradata
 
+  # Servidor de identidade (login e perfis) — US10.
+  # Só para desenvolvimento local: start-dev usa banco em arquivo e HTTP sem TLS.
+  # Console: http://localhost:8081  (o back fica na 8080, o Oracle na 1521, o Airflow na 8088)
+  keycloak:
+    image: 'quay.io/keycloak/keycloak:26.4.0'
+    container_name: keycloak
+    command: start-dev --import-realm
+    environment:
+      # Usuário do console de administração (padrão de dev; troque no .env se quiser)
+      - KC_BOOTSTRAP_ADMIN_USERNAME=${KEYCLOAK_ADMIN:-admin}
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    ports:
+      - '8081:8080'
+    volumes:
+      # Os arquivos .json desta pasta são importados quando o container é criado.
+      # Sem volume de dados de propósito: o realm vive no JSON (versionado), então
+      # recriar o container sempre volta ao estado do repositório.
+      - ./keycloak:/opt/keycloak/data/import:ro
+
 volumes:
   oracle-data:
