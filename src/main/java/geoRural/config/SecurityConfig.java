@@ -23,6 +23,7 @@ import org.springframework.security.web.SecurityFilterChain;
  *   Fontes, arquivos, mapeamentos, quarentena (escrita) OPERADOR_DADOS, GESTOR
  *   Domínios, destinos, referências cruzadas ......... OPERADOR_DADOS, GESTOR
  *   Criar/calcular/desativar indicador e pipeline .... OPERADOR_DADOS, GESTOR
+ *   Gestão de usuários e perfis (T27) ................ GESTOR
  */
 @Configuration
 @EnableWebSecurity
@@ -49,6 +50,11 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html", "/webjars/**").permitAll()
                         // Página de erro do Spring: sem isto, um 404 vira 403/401 e esconde o erro de verdade.
                         .requestMatchers("/error").permitAll()
+
+                        // --- Gestão de usuários e perfis (T27): só o GESTOR ---
+                        // Já cairia no anyRequest abaixo; a regra explícita deixa a intenção escrita e protege
+                        // caso o anyRequest mude um dia.
+                        .requestMatchers("/api/v1/usuarios/**").hasRole(GESTOR)
 
                         // --- Consulta territorial e indicadores (somente leitura) ---
                         // Inclui /imoveis/{cod}/indicadores e o histórico.
