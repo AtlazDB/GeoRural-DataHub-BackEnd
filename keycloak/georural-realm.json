@@ -55,9 +55,17 @@
     {
       "clientId": "georural-backend",
       "name": "GeoRural DataHub (API Spring)",
+      "description": "Back-end: valida tokens e, com a credencial técnica, gerencia usuários pela API admin do Keycloak",
       "enabled": true,
       "protocol": "openid-connect",
-      "bearerOnly": true
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_BACKEND_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -136,6 +144,19 @@
         "default-roles-georural",
         "GESTOR"
       ]
+    },
+    {
+      "username": "service-account-georural-backend",
+      "enabled": true,
+      "serviceAccountClientId": "georural-backend",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "manage-users",
+          "view-realm"
+        ]
+      }
     }
   ]
 }
