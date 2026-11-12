@@ -1,5 +1,7 @@
 package geoRural.usuario.service;
 
+import geoRural.usuario.dto.MunicipiosRequest;
+import geoRural.usuario.dto.MunicipiosResponse;
 import geoRural.usuario.dto.UsuarioResponse;
 
 import java.util.List;
@@ -18,4 +20,9 @@ public interface UsuarioService {
      * @param idLogado id (sub) de quem está pedindo, para impedir que o gestor se tranque para fora
      */
     UsuarioResponse definirPerfis(String id, Set<String> perfis, String idLogado);
+
+    MunicipiosResponse municipios(String id);
+
+    /** Troca as cidades liberadas do usuário. todas = true ou lista vazia libera o Paraná inteiro. */
+    MunicipiosResponse definirMunicipios(String id, MunicipiosRequest pedido, String liberadoPor);
 }
