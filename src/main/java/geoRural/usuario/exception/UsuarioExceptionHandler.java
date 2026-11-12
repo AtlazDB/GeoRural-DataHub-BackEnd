@@ -29,6 +29,11 @@ public class UsuarioExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErroResponse.de(msg));
     }
 
+    @ExceptionHandler(MunicipioInvalidoException.class)
+    public ResponseEntity<ErroResponse> municipioInvalido(MunicipioInvalidoException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErroResponse.de(e.getMessage()));
+    }
+
     @ExceptionHandler(OperacaoNaoPermitidaException.class)
     public ResponseEntity<ErroResponse> operacaoNaoPermitida(OperacaoNaoPermitidaException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(e.getMessage()));
