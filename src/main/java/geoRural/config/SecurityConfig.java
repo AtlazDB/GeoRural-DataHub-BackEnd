@@ -51,6 +51,9 @@ public class SecurityConfig {
                         // Página de erro do Spring: sem isto, um 404 vira 403/401 e esconde o erro de verdade.
                         .requestMatchers("/error").permitAll()
 
+                        // --- Região do próprio usuário (US14): qualquer perfil logado ---
+                        .requestMatchers(HttpMethod.GET, "/api/v1/acesso").authenticated()
+
                         // --- Gestão de usuários e perfis (T27): só o GESTOR ---
                         // Já cairia no anyRequest abaixo; a regra explícita deixa a intenção escrita e protege
                         // caso o anyRequest mude um dia.

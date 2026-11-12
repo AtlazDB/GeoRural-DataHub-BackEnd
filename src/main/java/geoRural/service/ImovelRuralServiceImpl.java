@@ -5,6 +5,7 @@ import geoRural.dto.ImovelResumoResponse;
 import geoRural.dto.MapaImoveisResponse;
 import geoRural.dto.MapaImoveisResponse.Feature;
 import geoRural.dto.PaginaResponse;
+import geoRural.acesso.AcessoTerritorial;
 import geoRural.exception.ImovelNaoEncontradoException;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.entity.ImovelRural;
@@ -39,34 +40,38 @@ public class ImovelRuralServiceImpl implements ImovelRuralService {
     private final ImovelRuralRepository repository;
     private final MunicipioService municipioService;
     private final ImovelRuralConsultaRepository consultaRepository;
+    private final AcessoTerritorial acesso;
 
     public ImovelRuralServiceImpl(ImovelRuralRepository repository,
                                   MunicipioService municipioService,
-                                  ImovelRuralConsultaRepository consultaRepository) {
+                                  ImovelRuralConsultaRepository consultaRepository,
+                                  AcessoTerritorial acesso) {
         this.repository = repository;
         this.municipioService = municipioService;
         this.consultaRepository = consultaRepository;
+        this.acesso = acesso;
     }
 
     @Override
     public List<ImovelRural> listarTodos() {
-        return repository.findAll();
+        return daRegiao(repository.findAll());
     }
 
     @Override
     public ImovelRural buscarPorCodImovel(String codImovel) {
+        acesso.exigirImovel(codImovel);
         return repository.findByCodImovel(codImovel)
                 .orElseThrow(() -> new ImovelNaoEncontradoException(codImovel));
     }
 
     @Override
     public List<ImovelRural> listarPorMunicipio(String municipio) {
-        return repository.findByMunicipio(municipio);
+        return daRegiao(repository.findByMunicipio(municipio));
     }
 
     @Override
     public List<ImovelRural> listarPorEstado(String estado) {
-        return repository.findByEstado(estado.trim().toUpperCase());
+        return daRegiao(repository.findByEstado(estado.trim().toUpperCase()));
     }
 
     // Filtra pelo vínculo espacial (municipio_id), não pelo nome em texto que a
@@ -166,5 +171,12 @@ public class ImovelRuralServiceImpl implements ImovelRuralService {
         propriedades.put("areaHa", imovel.areaHa());
         propriedades.put("situacao", imovel.situacao());
         return propriedades;
+    }
+
+    private List<ImovelRural> daRegiao(List<ImovelRural> imoveis) {
+        if (acesso.municipiosLiberados().isEmpty()) {
+            return imoveis;
+        }
+        return imoveis.stream().filter(i -> acesso.permiteImovel(i.getCodImovel())).toList();
     }
 }

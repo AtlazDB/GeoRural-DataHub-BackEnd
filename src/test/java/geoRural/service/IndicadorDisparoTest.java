@@ -1,5 +1,6 @@
 package geoRural.service;
 
+import geoRural.acesso.AcessoTerritorial;
 import geoRural.repository.ImovelRuralRepository;
 import geoRural.repository.IndicadorRepository;
 import org.junit.jupiter.api.Test;
@@ -16,7 +17,7 @@ class IndicadorDisparoTest {
     private final IndicadorRepository repository = mock(IndicadorRepository.class);
     private final AirflowClient airflow = mock(AirflowClient.class);
     private final IndicadorService service =
-            new IndicadorServiceImpl(repository, mock(ImovelRuralRepository.class), airflow);
+            new IndicadorServiceImpl(repository, mock(ImovelRuralRepository.class), airflow, mock(AcessoTerritorial.class));
 
     @Test
     void calcularDisparaADagDoAirflow() {

@@ -1,5 +1,6 @@
 package geoRural.indicator.service;
 
+import geoRural.acesso.AcessoTerritorial;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
@@ -38,15 +39,18 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
     private final IndicatorResultRepository resultRepository;
     private final FonteRepository fonteRepository;
     private final AirflowClient airflow;
+    private final AcessoTerritorial acesso;
 
     public IndicatorDefinitionServiceImpl(IndicatorDefinitionRepository repository,
                                           IndicatorResultRepository resultRepository,
                                           FonteRepository fonteRepository,
-                                          AirflowClient airflow) {
+                                          AirflowClient airflow,
+                                          AcessoTerritorial acesso) {
         this.repository = repository;
         this.resultRepository = resultRepository;
         this.fonteRepository = fonteRepository;
         this.airflow = airflow;
+        this.acesso = acesso;
     }
 
     @Override
@@ -92,6 +96,7 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
     public IndicatorResultResponse findLatestResult(String code, String codImovel) {
         // Primeiro o indicador: assim o 404 diz se o problema é a sigla ou o imóvel.
         findByCode(code);
+        acesso.exigirImovel(codImovel);
         return resultRepository.findLatest(code, codImovel)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "O indicador \"" + code + "\" ainda não foi calculado para o imóvel " + codImovel + "."));

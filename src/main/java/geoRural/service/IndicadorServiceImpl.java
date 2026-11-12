@@ -7,6 +7,7 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import geoRural.acesso.AcessoTerritorial;
 import geoRural.dto.IndicadorResponse;
 import geoRural.dto.IndicadoresImovelResponse;
 import geoRural.exception.ImovelNaoEncontradoException;
@@ -24,12 +25,14 @@ public class IndicadorServiceImpl implements IndicadorService {
     private final IndicadorRepository repository;
     private final ImovelRuralRepository imovelRepository;
     private final AirflowClient airflow;
+    private final AcessoTerritorial acesso;
 
     public IndicadorServiceImpl(IndicadorRepository repository, ImovelRuralRepository imovelRepository,
-                                AirflowClient airflow) {
+                                AirflowClient airflow, AcessoTerritorial acesso) {
         this.repository = repository;
         this.imovelRepository = imovelRepository;
         this.airflow = airflow;
+        this.acesso = acesso;
     }
 
     @Override
@@ -58,6 +61,7 @@ public class IndicadorServiceImpl implements IndicadorService {
     }
 
     private void exigirImovel(String codImovel) {
+        acesso.exigirImovel(codImovel);
         if (!imovelRepository.existsByCodImovel(codImovel)) {
             throw new ImovelNaoEncontradoException(codImovel);
         }
