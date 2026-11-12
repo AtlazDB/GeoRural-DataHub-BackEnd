@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import geoRural.acesso.AcessoTerritorial;
 import geoRural.dto.FiltroImoveis;
 import geoRural.dto.ImovelResumoResponse;
 
@@ -18,9 +19,11 @@ import geoRural.dto.ImovelResumoResponse;
 public class ImovelRuralConsultaRepository {
 
     private final JdbcTemplate jdbc;
+    private final AcessoTerritorial acesso;
 
-    public ImovelRuralConsultaRepository(JdbcTemplate jdbc) {
+    public ImovelRuralConsultaRepository(JdbcTemplate jdbc, AcessoTerritorial acesso) {
         this.jdbc = jdbc;
+        this.acesso = acesso;
     }
 
     public long contar(FiltroImoveis filtro) {
@@ -105,7 +108,7 @@ public class ImovelRuralConsultaRepository {
      * Ariranha do Ivaí, São João do Ivaí... O CAR grava o nome sem acento ("Ivai") e o IBGE com
      * ("Ivaí"); o NLSSORT com BINARY_AI compara ignorando acento e maiúsculas, então os dois batem.
      */
-    private static List<String> condicoes(FiltroImoveis filtro, List<Object> parametros) {
+    private List<String> condicoes(FiltroImoveis filtro, List<Object> parametros) {
         List<String> condicoes = new ArrayList<>();
         if (preenchido(filtro.municipio())) {
             condicoes.add("NLSSORT(municipio, 'NLS_SORT=BINARY_AI') = NLSSORT(?, 'NLS_SORT=BINARY_AI')");
@@ -119,6 +122,7 @@ public class ImovelRuralConsultaRepository {
             condicoes.add("situacao = ?");
             parametros.add(filtro.situacao().trim().toUpperCase());
         }
+        acesso.filtrarImoveis("cod_imovel", condicoes, parametros);
         return condicoes;
     }
 
