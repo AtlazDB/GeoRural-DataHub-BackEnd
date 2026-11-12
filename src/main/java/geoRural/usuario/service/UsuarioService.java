@@ -1,6 +1,7 @@
 package geoRural.usuario.service;
 
 import geoRural.usuario.dto.MunicipiosRequest;
+import geoRural.usuario.dto.NovoUsuarioRequest;
 import geoRural.usuario.dto.MunicipiosResponse;
 import geoRural.usuario.dto.UsuarioResponse;
 
@@ -13,6 +14,9 @@ public interface UsuarioService {
     List<UsuarioResponse> listar(String busca, int pagina, int tamanho);
 
     UsuarioResponse buscar(String id);
+
+    /** Cria o usuário no Keycloak com os perfis e as cidades; liberadoPor é o login de quem criou. */
+    UsuarioResponse criar(NovoUsuarioRequest pedido, String liberadoPor);
 
     /**
      * Define quais perfis do GeoRural o usuário tem (substitui o conjunto atual).
