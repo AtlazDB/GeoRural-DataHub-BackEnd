@@ -76,6 +76,12 @@ public class IndicadorRepository {
                 (rs, n) -> mapear(rs), codImovel, indicador);
     }
 
+    /** O cálculo mais recente de cada indicador feito com uma versão específica do imóvel. */
+    public List<IndicadorResponse> buscarPorVersaoImovel(String codImovel, long versaoImovelId) {
+        return jdbc.query("SELECT * FROM (" + SQL_INDICADORES + " AND ii.versao_imovel_id = ?) WHERE rn = 1 ORDER BY indicador",
+                (rs, n) -> mapear(rs), codImovel, versaoImovelId);
+    }
+
     public Optional<RegraVigente> regraVigente(String indicador) {
         return jdbc.query("""
                 SELECT id, codigo, versao, parametros FROM regra_calculo
