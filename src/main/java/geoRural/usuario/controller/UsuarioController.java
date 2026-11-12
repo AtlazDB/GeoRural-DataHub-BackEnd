@@ -2,12 +2,14 @@ package geoRural.usuario.controller;
 
 import geoRural.usuario.dto.MunicipiosRequest;
 import geoRural.usuario.dto.MunicipiosResponse;
+import geoRural.usuario.dto.NovoUsuarioRequest;
 import geoRural.usuario.dto.PerfisRequest;
 import geoRural.usuario.dto.UsuarioResponse;
 import geoRural.usuario.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +35,15 @@ public class UsuarioController {
             @RequestParam(defaultValue = "20") int tamanho) {
 
         return service.listar(busca, pagina, tamanho);
+    }
+
+    @Operation(summary = "Cria um usuário com perfis e cidades",
+            description = "A senha é provisória: o Keycloak pede uma nova no primeiro login. "
+                    + "Login ou e-mail repetido responde 409.")
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public UsuarioResponse criar(@Valid @RequestBody NovoUsuarioRequest corpo, @AuthenticationPrincipal Jwt jwt) {
+        return service.criar(corpo, jwt.getClaimAsString("preferred_username"));
     }
 
     @Operation(summary = "Um usuário com seus perfis")

@@ -2,6 +2,7 @@ package geoRural.usuario.keycloak;
 
 import geoRural.config.KeycloakAdminProperties;
 import geoRural.usuario.exception.KeycloakIndisponivelException;
+import geoRural.usuario.exception.UsuarioDuplicadoException;
 import geoRural.usuario.exception.UsuarioNaoEncontradoException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
@@ -15,6 +16,7 @@ import org.springframework.web.client.RestClientException;
 import geoRural.usuario.exception.PerfilInvalidoException;
 import org.springframework.http.HttpMethod;
 
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -91,6 +93,36 @@ public class KeycloakAdminClient {
 
         // --------------------------------------------------------------- escritas
 
+    /**
+     * Cria o usuário, ativo, com a senha provisória (o Keycloak pede uma nova no primeiro login).
+     * Devolve o id, que o Keycloak manda no cabeçalho Location. Login ou e-mail repetido: 409.
+     */
+    public String criarUsuario(String username, String email, String nome, String sobrenome, String senha) {
+        Map<String, Object> corpo = Map.of(
+                "username", username,
+                "email", email,
+                "firstName", nome,
+                "lastName", sobrenome,
+                "enabled", true,
+                "emailVerified", true,
+                "credentials", List.of(Map.of("type", "password", "value", senha, "temporary", true)));
+        try {
+            URI local = chamar(() -> http.post()
+                    .uri("/admin/realms/{realm}/users", props.realm())
+                    .headers(h -> h.setBearerAuth(token()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(corpo)
+                    .retrieve()
+                    .toBodilessEntity()
+                    .getHeaders()
+                    .getLocation());
+            String caminho = local.getPath();
+            return caminho.substring(caminho.lastIndexOf('/') + 1);
+        } catch (HttpClientErrorException.Conflict e) {
+            throw new UsuarioDuplicadoException();
+        }
+    }
+
     /** Busca o perfil pelo nome. Lança PerfilInvalidoException se o Keycloak não o conhece. */
     public KcPerfil buscarPerfil(String nome) {
         try {
@@ -137,13 +169,13 @@ public class KeycloakAdminClient {
     // ------------------------------------------------------------------- apoio
 
     /**
-     * Executa uma chamada ao Keycloak. 404 passa adiante (quem chamou decide o que significa);
+     * Executa uma chamada ao Keycloak. 404 e 409 passam adiante (quem chamou decide o que significa);
      * qualquer outra falha vira KeycloakIndisponivelException.
      */
     private <T> T chamar(Supplier<T> chamada) {
         try {
             return chamada.get();
-        } catch (HttpClientErrorException.NotFound e) {
+        } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Conflict e) {
             throw e;
         } catch (HttpClientErrorException.Unauthorized e) {
             esquecerToken();

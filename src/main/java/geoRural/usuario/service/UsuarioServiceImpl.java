@@ -2,6 +2,7 @@ package geoRural.usuario.service;
 
 import geoRural.usuario.dto.MunicipiosRequest;
 import geoRural.usuario.dto.MunicipiosResponse;
+import geoRural.usuario.dto.NovoUsuarioRequest;
 import geoRural.usuario.dto.UsuarioResponse;
 import geoRural.usuario.exception.MunicipioInvalidoException;
 import geoRural.usuario.exception.OperacaoNaoPermitidaException;
@@ -53,6 +54,21 @@ public class UsuarioServiceImpl implements UsuarioService {
     }
 
     @Override
+    @Transactional
+    public UsuarioResponse criar(NovoUsuarioRequest pedido, String liberadoPor) {
+        Set<String> perfis = validar(pedido.perfis());
+        Set<String> cidades = codigosValidos(pedido.todasCidades(), pedido.municipios());
+
+        String id = keycloak.criarUsuario(pedido.username().trim(), pedido.email().trim(),
+                pedido.nome().trim(), pedido.sobrenome().trim(), pedido.senhaProvisoria());
+        for (String nome : perfis) {
+            keycloak.atribuirPerfil(id, keycloak.buscarPerfil(nome));
+        }
+        municipios.substituir(id, cidades, liberadoPor);
+        return buscar(id);
+    }
+
+    @Override
     public MunicipiosResponse municipios(String id) {
         keycloak.buscarUsuario(id);
         return MunicipiosResponse.de(municipios.listar(id));
@@ -61,17 +77,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     @Transactional
     public MunicipiosResponse definirMunicipios(String id, MunicipiosRequest pedido, String liberadoPor) {
-        Set<String> codigos = new HashSet<>();
-        if (!pedido.todas() && pedido.municipios() != null) {
-            pedido.municipios().stream()
-                    .filter(c -> c != null && !c.isBlank())
-                    .map(String::trim)
-                    .forEach(codigos::add);
-        }
-        Set<String> inexistentes = municipios.inexistentes(codigos);
-        if (!inexistentes.isEmpty()) {
-            throw new MunicipioInvalidoException(inexistentes);
-        }
+        Set<String> codigos = codigosValidos(pedido.todas(), pedido.municipios());
         keycloak.buscarUsuario(id);   // 404 antes de gravar
         municipios.substituir(id, codigos, liberadoPor);
         return MunicipiosResponse.de(municipios.listar(id));
@@ -108,6 +114,22 @@ public class UsuarioServiceImpl implements UsuarioService {
     }
 
     // ------------------------------------------------------------------- apoio
+
+    /** Os códigos pedidos, sem espaços; vazio quando é para liberar todas as cidades. */
+    private Set<String> codigosValidos(boolean todas, Set<String> pedidos) {
+        Set<String> codigos = new HashSet<>();
+        if (!todas && pedidos != null) {
+            pedidos.stream()
+                    .filter(c -> c != null && !c.isBlank())
+                    .map(String::trim)
+                    .forEach(codigos::add);
+        }
+        Set<String> inexistentes = municipios.inexistentes(codigos);
+        if (!inexistentes.isEmpty()) {
+            throw new MunicipioInvalidoException(inexistentes);
+        }
+        return codigos;
+    }
 
     private Set<String> validar(Set<String> pedidos) {
         Set<String> limpos = new HashSet<>();
