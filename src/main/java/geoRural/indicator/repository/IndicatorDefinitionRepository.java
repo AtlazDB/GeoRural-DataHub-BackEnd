@@ -88,6 +88,20 @@ public class IndicatorDefinitionRepository {
                 """, Integer.class, fonteId);
     }
 
+    public boolean hasReferenceDateBySource(Long fonteId) {
+        Integer total = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                  FROM input_feature f
+                  JOIN dataset_versao dv ON dv.id = f.dataset_versao_id
+                  JOIN execucao e        ON e.id  = dv.execucao_id
+                  JOIN arquivo_bruto a   ON a.id  = e.arquivo_bruto_id
+                 WHERE a.fonte_id = ?
+                   AND f.data_referencia IS NOT NULL
+                   AND ROWNUM = 1
+                """, Integer.class, fonteId);
+        return total != null && total > 0;
+    }
+
     private IndicatorDefinitionResponse toResponse(ResultSet rs, int rowNum) throws SQLException {
         return new IndicatorDefinitionResponse(
                 rs.getString("code"),

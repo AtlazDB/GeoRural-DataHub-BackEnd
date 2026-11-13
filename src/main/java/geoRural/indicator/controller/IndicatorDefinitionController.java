@@ -2,6 +2,7 @@ package geoRural.indicator.controller;
 
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
+import geoRural.indicator.dto.IndicatorMunicipalityResponse;
 import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.service.IndicatorDefinitionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -83,5 +84,15 @@ public class IndicatorDefinitionController {
     public IndicatorResultResponse findLatestResult(@PathVariable String code,
                                                     @RequestParam String codImovel) {
         return service.findLatestResult(code, codImovel);
+    }
+
+    /**
+     * 200 (lista vazia se ainda não calculado) · 404 indicador não existe.
+     * Por município: quantos imóveis em cada status, a média do valor e a soma do numerador.
+     */
+    @Operation(summary = "Resultado do indicador agregado por município")
+    @GetMapping("/{code}/municipalities")
+    public List<IndicatorMunicipalityResponse> findByMunicipality(@PathVariable String code) {
+        return service.findByMunicipality(code);
     }
 }
