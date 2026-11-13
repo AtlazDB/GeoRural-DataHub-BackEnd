@@ -7,6 +7,7 @@ import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
+import geoRural.indicator.dto.IndicatorMunicipalityResponse;
 import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
@@ -208,6 +209,36 @@ class IndicatorDefinitionControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(service, never()).findLatestResult(any(), any());
+    }
+
+    @Test
+    void findByMunicipalityRespondsWithOneLinePerMunicipality() throws Exception {
+        when(service.findByMunicipality("DFOCO")).thenReturn(List.of(
+                new IndicatorMunicipalityResponse("4106902", "Curitiba", "PR", 3, 1, 1, 1, 0,
+                        new BigDecimal("12.5000"), new BigDecimal("7")),
+                new IndicatorMunicipalityResponse(null, null, null, 1, 1, 0, 0, 0, BigDecimal.ZERO, null)));
+
+        String corpo = mockMvc.perform(get("/api/v1/indicators/DFOCO/municipalities"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<Map<String, Object>> linhas = MAPPER.readValue(corpo, new TypeReference<>() {});
+
+        assertThat(linhas).hasSize(2);
+        assertThat(linhas.get(0))
+                .containsEntry("codIbge", "4106902")
+                .containsEntry("name", "Curitiba")
+                .containsEntry("properties", 3)
+                .containsEntry("critico", 1)
+                .containsEntry("averageValue", 12.5);
+        assertThat(linhas.get(1)).containsEntry("name", null).containsEntry("numeratorSum", null);
+    }
+
+    @Test
+    void findByMunicipalityOfMissingIndicatorRespondsNotFound() throws Exception {
+        when(service.findByMunicipality("NADA")).thenThrow(new ResourceNotFoundException("Indicador \"NADA\" não encontrado."));
+
+        mockMvc.perform(get("/api/v1/indicators/NADA/municipalities"))
+                .andExpect(status().isNotFound());
     }
 
     private Map<String, Object> body(
