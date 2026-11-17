@@ -1,14 +1,18 @@
 package geoRural.indicator.service;
 
 import geoRural.acesso.AcessoTerritorial;
+import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
+import geoRural.indicator.dto.IndicatorCalculationResponse;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
 import geoRural.indicator.dto.IndicatorMunicipalityResponse;
 import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
+import geoRural.indicator.exception.IndicatorCalculationInProgressException;
+import geoRural.indicator.repository.IndicatorCalculationRepository;
 import geoRural.indicator.repository.IndicatorDefinitionRepository;
 import geoRural.indicator.repository.IndicatorResultRepository;
 import geoRural.repository.FonteRepository;
@@ -44,17 +48,20 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
 
     private final IndicatorDefinitionRepository repository;
     private final IndicatorResultRepository resultRepository;
+    private final IndicatorCalculationRepository calculationRepository;
     private final FonteRepository fonteRepository;
     private final AirflowClient airflow;
     private final AcessoTerritorial acesso;
 
     public IndicatorDefinitionServiceImpl(IndicatorDefinitionRepository repository,
                                           IndicatorResultRepository resultRepository,
+                                          IndicatorCalculationRepository calculationRepository,
                                           FonteRepository fonteRepository,
                                           AirflowClient airflow,
                                           AcessoTerritorial acesso) {
         this.repository = repository;
         this.resultRepository = resultRepository;
+        this.calculationRepository = calculationRepository;
         this.fonteRepository = fonteRepository;
         this.airflow = airflow;
         this.acesso = acesso;
@@ -96,14 +103,72 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
         }
     }
 
+    // Sem @Transactional de propósito: a linha NA_FILA precisa estar gravada (commit) antes de a DAG
+    // começar, porque é nela que a DAG escreve o andamento.
     @Override
-    public void calculate(String code) {
+    public IndicatorCalculationResponse calculate(String code) {
         IndicatorDefinitionResponse indicator = findByCode(code);
         if (!indicator.active()) {
             throw new RequisicaoInvalidaException("O indicador \"" + code + "\" está desativado e não é mais calculado.");
         }
-        // Os três modelos (POINT_DENSITY, AREA_COVERAGE e BASE_COVERAGE) são calculados pela mesma DAG.
-        airflow.disparar(DAG_CALCULATE, Map.of("code", code));
+        closeStoppedCalculations();
+        if (calculationRepository.findActive(code).isPresent()) {
+            throw new IndicatorCalculationInProgressException(code);
+        }
+        long id = calculationRepository.create(code);
+        try {
+            // Os três modelos (POINT_DENSITY, AREA_COVERAGE e BASE_COVERAGE) são calculados pela mesma DAG.
+            String dagRunId = airflow.disparar(DAG_CALCULATE, Map.of("code", code, "calculation_id", id));
+            calculationRepository.setDagRunId(id, dagRunId);
+        } catch (RuntimeException e) {
+            // O disparo não chegou ao Airflow: sem isso, a linha ficaria NA_FILA para sempre e
+            // bloquearia um novo "Calcular".
+            calculationRepository.markError(id, e.getMessage());
+            throw e;
+        }
+        return calculationRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException("O cálculo " + id + " sumiu logo depois de criado."));
+    }
+
+    @Override
+    public List<IndicatorCalculationResponse> findLatestCalculations() {
+        closeStoppedCalculations();
+        return calculationRepository.findLatestOfEach();
+    }
+
+    /**
+     * Fecha como ERRO o cálculo ativo cuja execução no Airflow já acabou ou sumiu. Acontece quando a
+     * tarefa morre sem passar pelo fim da DAG: execução parada pela API ou pela tela do Airflow,
+     * falta de memória, Airflow reiniciado. Sem isso, o cálculo ficaria EM_ANDAMENTO para sempre e
+     * o "Calcular" daria 409. Se o Airflow estiver fora do ar, não dá para saber: fica para a
+     * próxima consulta (a tela pergunta a cada poucos segundos).
+     */
+    private void closeStoppedCalculations() {
+        for (IndicatorCalculationRepository.ActiveRun run : calculationRepository.findActiveRuns()) {
+            String state;
+            try {
+                state = airflow.estado(DAG_CALCULATE, run.dagRunId());
+            } catch (AirflowIndisponivelException e) {
+                return;
+            }
+            String message = stoppedMessage(state);
+            if (message != null) {
+                calculationRepository.markError(run.id(), message);
+            }
+        }
+    }
+
+    /** A mensagem de erro para a execução que acabou com o cálculo ainda ativo; null se ela segue viva. */
+    private static String stoppedMessage(String state) {
+        if (state == null) {
+            return "A execução do cálculo não existe mais no Airflow. Calcule de novo.";
+        }
+        return switch (state) {
+            case "failed" -> "O cálculo foi interrompido no Airflow. Calcule de novo.";
+            // A DAG grava o fim antes de terminar; success com o cálculo ainda ativo = o fim não foi gravado.
+            case "success" -> "O Airflow terminou sem registrar o fim do cálculo. Calcule de novo.";
+            default -> null; // queued, running
+        };
     }
 
     @Override

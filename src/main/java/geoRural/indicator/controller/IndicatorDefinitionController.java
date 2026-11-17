@@ -1,5 +1,6 @@
 package geoRural.indicator.controller;
 
+import geoRural.indicator.dto.IndicatorCalculationResponse;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
 import geoRural.indicator.dto.IndicatorMunicipalityResponse;
@@ -65,14 +66,24 @@ public class IndicatorDefinitionController {
     }
 
     /**
-     * 202 · 400 desativado · 404 · 503 Airflow fora do ar.
-     * Só dispara a DAG calcular_indicador: os resultados aparecem quando ela termina.
+     * 202 com o cálculo (NA_FILA) · 400 desativado · 404 · 409 já está sendo calculado · 503 Airflow fora do ar.
+     * Só dispara a DAG calcular_indicador: o andamento aparece em GET /calculations/latest.
      */
     @Operation(summary = "Calcula o indicador para todos os imóveis (dispara a DAG no Airflow)")
     @PostMapping("/{code}/calculate")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public void calculate(@PathVariable String code) {
-        service.calculate(code);
+    public IndicatorCalculationResponse calculate(@PathVariable String code) {
+        return service.calculate(code);
+    }
+
+    /**
+     * 200. O último cálculo de cada indicador, para a barra de progresso: a tela pergunta de tempos
+     * em tempos enquanto algum estiver NA_FILA ou EM_ANDAMENTO. Indicador nunca calculado não aparece.
+     */
+    @Operation(summary = "Andamento do último cálculo de cada indicador")
+    @GetMapping("/calculations/latest")
+    public List<IndicatorCalculationResponse> findLatestCalculations() {
+        return service.findLatestCalculations();
     }
 
     /**
