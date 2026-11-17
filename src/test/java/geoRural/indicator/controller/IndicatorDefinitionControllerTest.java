@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
+import geoRural.indicator.dto.IndicatorCalculationResponse;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
 import geoRural.indicator.dto.IndicatorMunicipalityResponse;
 import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
+import geoRural.indicator.exception.IndicatorCalculationInProgressException;
 import geoRural.indicator.service.IndicatorDefinitionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -171,6 +173,48 @@ class IndicatorDefinitionControllerTest {
 
         mockMvc.perform(post("/api/v1/indicators/DFOCO/calculate"))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    // ---- progresso do cálculo (US13.T18)
+
+    @Test
+    void calculateRespondsAcceptedWithTheCalculationInTheQueue() throws Exception {
+        when(service.calculate("DFOCO")).thenReturn(calculation("NA_FILA", 0, null));
+
+        Map<String, Object> resposta = body(post("/api/v1/indicators/DFOCO/calculate"), status().isAccepted());
+
+        assertThat(resposta).containsEntry("id", 42).containsEntry("status", "NA_FILA").containsEntry("progress", 0);
+    }
+
+    @Test
+    void calculateAlreadyRunningRespondsConflict() throws Exception {
+        when(service.calculate("DFOCO")).thenThrow(new IndicatorCalculationInProgressException("DFOCO"));
+
+        Map<String, Object> resposta = body(post("/api/v1/indicators/DFOCO/calculate"), status().isConflict());
+
+        assertThat((String) resposta.get("mensagem")).contains("já está sendo calculado");
+    }
+
+    @Test
+    void findLatestCalculationsRespondsOkWithProgressAndStep() throws Exception {
+        when(service.findLatestCalculations()).thenReturn(List.of(calculation("EM_ANDAMENTO", 45, "CALCULO")));
+
+        String corpo = mockMvc.perform(get("/api/v1/indicators/calculations/latest"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<Map<String, Object>> lista = MAPPER.readValue(corpo, new TypeReference<>() {});
+
+        assertThat(lista).hasSize(1);
+        assertThat(lista.get(0))
+                .containsEntry("indicatorCode", "DFOCO")
+                .containsEntry("status", "EM_ANDAMENTO")
+                .containsEntry("progress", 45)
+                .containsEntry("progressStep", "CALCULO");
+    }
+
+    private static IndicatorCalculationResponse calculation(String status, int progress, String step) {
+        return new IndicatorCalculationResponse(42L, "DFOCO", status, progress, step,
+                OffsetDateTime.parse("2026-11-17T14:00:00-03:00"), null, null, null);
     }
 
     // ---- resultado (US13.T08)

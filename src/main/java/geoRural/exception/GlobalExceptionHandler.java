@@ -2,6 +2,7 @@ package geoRural.exception;
 
 import geoRural.dto.ErroResponse;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
+import geoRural.indicator.exception.IndicatorCalculationInProgressException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -85,6 +86,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DuplicateIndicatorCodeException.class)
     public ResponseEntity<ErroResponse> handleDuplicateIndicatorCode(DuplicateIndicatorCodeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IndicatorCalculationInProgressException.class)
+    public ResponseEntity<ErroResponse> handleIndicatorCalculationInProgress(IndicatorCalculationInProgressException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 

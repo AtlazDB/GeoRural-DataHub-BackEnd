@@ -75,6 +75,18 @@ class AirflowClientTest {
     }
 
     @Test
+    void estadoDevolveOStateDaExecucao() {
+        assertThat(cliente("", 30).estado("revalidar_registro", "manual__2026-11-17T18:09:31+00:00"))
+                .isEqualTo("running");
+    }
+
+    @Test
+    void estadoDeExecucaoQueNaoExisteEhNulo() {
+        // Nenhum contexto para esta DAG no servidor local: ele responde 404.
+        assertThat(cliente("", 30).estado("dag_que_nao_existe", "manual__x")).isNull();
+    }
+
+    @Test
     void dagPausadaNaoEDisparada() {
         pausada = true;
 

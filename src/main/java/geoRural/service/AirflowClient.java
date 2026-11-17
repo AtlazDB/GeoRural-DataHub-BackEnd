@@ -55,9 +55,9 @@ public class AirflowClient {
         this.espera = Duration.ofSeconds(esperaSegundos);
     }
 
-    /** Dispara a DAG com `conf` e volta logo: não espera a execução terminar. */
-    public void disparar(String dagId, Map<String, Object> conf) {
-        disparar(dagId, conf, token());
+    /** Dispara a DAG com `conf` e volta logo, sem esperar a execução terminar. Devolve o dag_run_id. */
+    public String disparar(String dagId, Map<String, Object> conf) {
+        return disparar(dagId, conf, token());
     }
 
     /** Dispara a DAG com `conf`, espera terminar e devolve o que a tarefa retornou. */
@@ -105,6 +105,17 @@ public class AirflowClient {
         return canceladas;
     }
 
+    /**
+     * O estado de uma execução: queued, running, success ou failed. Devolve {@code null} se a
+     * execução não existe mais no Airflow (foi apagada).
+     */
+    public String estado(String dagId, String dagRunId) {
+        String caminho = "/api/v2/dags/" + dagId + "/dagRuns/"
+                + URLEncoder.encode(dagRunId, StandardCharsets.UTF_8).replace("+", "%20");
+        JsonNode execucao = pedir("GET", caminho, null, token(), true);
+        return execucao == null ? null : execucao.path("state").asText();
+    }
+
     private String disparar(String dagId, Map<String, Object> conf, String token) {
         // DAG pausada aceita o disparo e a execução fica na fila para sempre: melhor avisar agora.
         if (pedir("GET", "/api/v2/dags/" + dagId, null, token).path("is_paused").asBoolean()) {
@@ -125,6 +136,11 @@ public class AirflowClient {
     }
 
     private JsonNode pedir(String metodo, String caminho, String corpo, String token) {
+        return pedir(metodo, caminho, corpo, token, false);
+    }
+
+    /** nuloSe404: devolve null em vez de lançar quando o recurso não existe. */
+    private JsonNode pedir(String metodo, String caminho, String corpo, String token, boolean nuloSe404) {
         HttpRequest.Builder pedido = HttpRequest.newBuilder(URI.create(url + caminho))
                 .timeout(TEMPO_POR_PEDIDO)
                 .header("Content-Type", "application/json")
@@ -135,6 +151,9 @@ public class AirflowClient {
         }
         try {
             HttpResponse<String> resposta = http.send(pedido.build(), HttpResponse.BodyHandlers.ofString());
+            if (nuloSe404 && resposta.statusCode() == 404) {
+                return null;
+            }
             if (resposta.statusCode() >= 400) {
                 throw new AirflowIndisponivelException("O Airflow respondeu HTTP " + resposta.statusCode()
                         + " em " + caminho + ".");

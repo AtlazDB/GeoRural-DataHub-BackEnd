@@ -4,10 +4,14 @@ import geoRural.acesso.AcessoTerritorial;
 import geoRural.usuario.repository.UsuarioMunicipioRepository;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
+import geoRural.exception.AirflowIndisponivelException;
+import geoRural.indicator.dto.IndicatorCalculationResponse;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
 import geoRural.indicator.dto.IndicatorDefinitionResponse;
 import geoRural.indicator.dto.StatusRangeRequest;
 import geoRural.indicator.exception.DuplicateIndicatorCodeException;
+import geoRural.indicator.exception.IndicatorCalculationInProgressException;
+import geoRural.indicator.repository.IndicatorCalculationRepository;
 import geoRural.indicator.dto.IndicatorMunicipalityResponse;
 import geoRural.indicator.dto.IndicatorResultResponse;
 import geoRural.indicator.repository.IndicatorDefinitionRepository;
@@ -26,8 +30,11 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,16 +48,21 @@ class IndicatorDefinitionServiceTest {
     private final IndicatorDefinitionRepository repository = mock(IndicatorDefinitionRepository.class);
     private final IndicatorResultRepository resultRepository = mock(IndicatorResultRepository.class);
     private final FonteRepository fonteRepository = mock(FonteRepository.class);
+    private final IndicatorCalculationRepository calculationRepository = mock(IndicatorCalculationRepository.class);
     private final AirflowClient airflow = mock(AirflowClient.class);
     private final IndicatorDefinitionService service =
-            new IndicatorDefinitionServiceImpl(repository, resultRepository, fonteRepository, airflow,
-                    new AcessoTerritorial(mock(UsuarioMunicipioRepository.class)));
+            new IndicatorDefinitionServiceImpl(repository, resultRepository, calculationRepository, fonteRepository,
+                    airflow, new AcessoTerritorial(mock(UsuarioMunicipioRepository.class)));
+
+    private static final long CALCULATION = 42L;
 
     @BeforeEach
     void sourceWithPoints() {
         when(fonteRepository.existsById(SOURCE)).thenReturn(true);
         when(repository.findGeometryTypesBySource(SOURCE)).thenReturn(List.of(1, 5));
         when(repository.findByCode("DFOCO")).thenReturn(Optional.of(saved("DFOCO")));
+        when(calculationRepository.create(anyString())).thenReturn(CALCULATION);
+        when(calculationRepository.findById(CALCULATION)).thenReturn(Optional.of(calculation("DFOCO", "NA_FILA")));
     }
 
     @Test
@@ -422,7 +434,100 @@ class IndicatorDefinitionServiceTest {
     void calculateTriggersTheDagWithTheCode() {
         service.calculate("DFOCO");
 
-        verify(airflow).disparar("calcular_indicador", Map.of("code", "DFOCO"));
+        verify(airflow).disparar("calcular_indicador", Map.of("code", "DFOCO", "calculation_id", CALCULATION));
+    }
+
+    // ---- progresso do cálculo (US13.T18)
+
+    @Test
+    void calculateRegistersTheCalculationBeforeTriggeringAndReturnsIt() {
+        when(airflow.disparar(anyString(), anyMap())).thenReturn("manual__2026-11-17");
+
+        IndicatorCalculationResponse resposta = service.calculate("DFOCO");
+
+        var ordem = inOrder(calculationRepository, airflow);
+        ordem.verify(calculationRepository).create("DFOCO");
+        ordem.verify(airflow).disparar(anyString(), anyMap());
+        ordem.verify(calculationRepository).setDagRunId(CALCULATION, "manual__2026-11-17");
+        assertThat(resposta.id()).isEqualTo(CALCULATION);
+        assertThat(resposta.status()).isEqualTo("NA_FILA");
+    }
+
+    @Test
+    void calculateRefusesWhenTheIndicatorIsAlreadyBeingCalculated() {
+        when(calculationRepository.findActive("DFOCO")).thenReturn(Optional.of(calculation("DFOCO", "EM_ANDAMENTO")));
+
+        assertThatThrownBy(() -> service.calculate("DFOCO"))
+                .isInstanceOf(IndicatorCalculationInProgressException.class)
+                .hasMessageContaining("já está sendo calculado");
+        verify(calculationRepository, never()).create(anyString());
+        verify(airflow, never()).disparar(anyString(), anyMap());
+    }
+
+    @Test
+    void calculateWithAirflowDownClosesTheCalculationWithTheError() {
+        when(airflow.disparar(anyString(), anyMap()))
+                .thenThrow(new AirflowIndisponivelException("A DAG calcular_indicador está pausada no Airflow."));
+
+        assertThatThrownBy(() -> service.calculate("DFOCO"))
+                .isInstanceOf(AirflowIndisponivelException.class);
+        verify(calculationRepository).markError(CALCULATION, "A DAG calcular_indicador está pausada no Airflow.");
+    }
+
+    @Test
+    void calculationStoppedInAirflowIsClosedAsErrorWhenTheScreenAsks() {
+        when(calculationRepository.findActiveRuns()).thenReturn(List.of(
+                new IndicatorCalculationRepository.ActiveRun(1L, "parada"),
+                new IndicatorCalculationRepository.ActiveRun(2L, "apagada"),
+                new IndicatorCalculationRepository.ActiveRun(3L, "rodando")));
+        when(airflow.estado("calcular_indicador", "parada")).thenReturn("failed");
+        when(airflow.estado("calcular_indicador", "apagada")).thenReturn(null);
+        when(airflow.estado("calcular_indicador", "rodando")).thenReturn("running");
+
+        service.findLatestCalculations();
+
+        verify(calculationRepository).markError(1L, "O cálculo foi interrompido no Airflow. Calcule de novo.");
+        verify(calculationRepository).markError(2L, "A execução do cálculo não existe mais no Airflow. Calcule de novo.");
+        verify(calculationRepository, never()).markError(eq(3L), anyString());
+    }
+
+    @Test
+    void calculateClosesTheStoppedCalculationBeforeCheckingForConflict() {
+        when(calculationRepository.findActiveRuns())
+                .thenReturn(List.of(new IndicatorCalculationRepository.ActiveRun(1L, "parada")));
+        when(airflow.estado("calcular_indicador", "parada")).thenReturn("failed");
+
+        service.calculate("DFOCO");
+
+        var ordem = inOrder(calculationRepository);
+        ordem.verify(calculationRepository).markError(eq(1L), anyString());
+        ordem.verify(calculationRepository).findActive("DFOCO");
+        ordem.verify(calculationRepository).create("DFOCO");
+    }
+
+    @Test
+    void withAirflowDownTheScreenStillGetsTheCalculations() {
+        when(calculationRepository.findActiveRuns())
+                .thenReturn(List.of(new IndicatorCalculationRepository.ActiveRun(1L, "rodando")));
+        when(airflow.estado(anyString(), anyString()))
+                .thenThrow(new AirflowIndisponivelException("Não foi possível falar com o Airflow."));
+        when(calculationRepository.findLatestOfEach()).thenReturn(List.of(calculation("DFOCO", "EM_ANDAMENTO")));
+
+        assertThat(service.findLatestCalculations()).hasSize(1);
+        verify(calculationRepository, never()).markError(anyLong(), anyString());
+    }
+
+    @Test
+    void findLatestCalculationsReturnsWhatTheRepositoryHas() {
+        List<IndicatorCalculationResponse> ultimos = List.of(calculation("DFOCO", "CONCLUIDO"));
+        when(calculationRepository.findLatestOfEach()).thenReturn(ultimos);
+
+        assertThat(service.findLatestCalculations()).isEqualTo(ultimos);
+    }
+
+    private static IndicatorCalculationResponse calculation(String code, String status) {
+        return new IndicatorCalculationResponse(CALCULATION, code, status, 0, null,
+                OffsetDateTime.parse("2026-11-17T14:00:00-03:00"), null, null, null);
     }
 
     @Test
@@ -456,7 +561,7 @@ class IndicatorDefinitionServiceTest {
 
         service.calculate("DCOB");
 
-        verify(airflow).disparar("calcular_indicador", Map.of("code", "DCOB"));
+        verify(airflow).disparar("calcular_indicador", Map.of("code", "DCOB", "calculation_id", CALCULATION));
     }
 
     // ---- resultado (US13.T08)
