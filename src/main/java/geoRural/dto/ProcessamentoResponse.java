@@ -10,4 +10,8 @@ public record ProcessamentoResponse(Long arquivoId, String status) {
     public static ProcessamentoResponse disparado(long arquivoId) {
         return new ProcessamentoResponse(arquivoId, "PROCESSANDO");
     }
+
+    public static ProcessamentoResponse cancelado(long arquivoId) {
+        return new ProcessamentoResponse(arquivoId, "REJEITADO");
+    }
 }

@@ -3,15 +3,20 @@ package geoRural.service;
 import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.ArquivoNaoEncontradoException;
 import geoRural.exception.ProcessamentoEmAndamentoException;
+import geoRural.exception.ProcessamentoNaoEmAndamentoException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ResultSetExtractor;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -63,6 +68,47 @@ class ProcessamentoArquivoServiceTest {
 
         assertThatThrownBy(() -> servico.processar(2L)).isInstanceOf(ProcessamentoEmAndamentoException.class);
         verify(airflow, never()).disparar(anyString(), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancelarEncerraNoAirflowEMarcaRejeitado() {
+        when(jdbc.query(anyString(), any(ResultSetExtractor.class), eq(5L))).thenReturn("PROCESSANDO");
+
+        assertThat(servico.cancelar(5L).status()).isEqualTo("REJEITADO");
+
+        InOrder ordem = inOrder(airflow, jdbc);
+        ordem.verify(airflow).cancelar("processar_arquivo", "arquivo_bruto_id", 5L);
+        ordem.verify(jdbc).update(contains("'FALHOU'"), eq(5L));
+        ordem.verify(jdbc).update(contains("'REJEITADO'"), eq(5L));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancelarSemAirflowDeixaOArquivoProcessando() {
+        when(jdbc.query(anyString(), any(ResultSetExtractor.class), eq(6L))).thenReturn("PROCESSANDO");
+        doThrow(new AirflowIndisponivelException("fora do ar"))
+                .when(airflow).cancelar(anyString(), anyString(), anyLong());
+
+        assertThatThrownBy(() -> servico.cancelar(6L)).isInstanceOf(AirflowIndisponivelException.class);
+        verify(jdbc, never()).update(anyString(), eq(6L));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancelarArquivoQueNaoEstaProcessandoDa409() {
+        when(jdbc.query(anyString(), any(ResultSetExtractor.class), eq(7L))).thenReturn("PROCESSADO");
+
+        assertThatThrownBy(() -> servico.cancelar(7L)).isInstanceOf(ProcessamentoNaoEmAndamentoException.class);
+        verify(airflow, never()).cancelar(anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancelarArquivoQueNaoExisteDa404() {
+        when(jdbc.query(anyString(), any(ResultSetExtractor.class), eq(8L))).thenReturn(null);
+
+        assertThatThrownBy(() -> servico.cancelar(8L)).isInstanceOf(ArquivoNaoEncontradoException.class);
     }
 
     @Test

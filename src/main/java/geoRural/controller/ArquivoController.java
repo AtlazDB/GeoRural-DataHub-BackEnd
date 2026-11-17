@@ -32,6 +32,16 @@ public class ArquivoController {
         return processamentoArquivoService.processar(id);
     }
 
+    /**
+     * Encerra no Airflow o processamento em andamento. O arquivo fica REJEITADO e pode ser
+     * processado de novo. Arquivo que não está PROCESSANDO: 409.
+     */
+    @Operation(summary = "Cancela o processamento em andamento do arquivo (REJEITADO)")
+    @PostMapping("/{id}/cancelar")
+    public ProcessamentoResponse cancelar(@PathVariable Long id) {
+        return processamentoArquivoService.cancelar(id);
+    }
+
     /** Só para arquivo REJEITADO que nunca gerou versão de dados; senão 409. */
     @Operation(summary = "Exclui um arquivo rejeitado que nunca gerou versão de dados")
     @DeleteMapping("/{id}")

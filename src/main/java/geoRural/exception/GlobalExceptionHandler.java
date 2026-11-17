@@ -73,6 +73,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
+    @ExceptionHandler(ProcessamentoNaoEmAndamentoException.class)
+    public ResponseEntity<ErroResponse> handleProcessamentoNaoEmAndamento(ProcessamentoNaoEmAndamentoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
     @ExceptionHandler(SiglaDuplicadaException.class)
     public ResponseEntity<ErroResponse> handleSiglaDuplicada(SiglaDuplicadaException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
