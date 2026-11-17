@@ -1,5 +1,7 @@
 package geoRural.usuario.controller;
 
+import geoRural.usuario.dto.MunicipiosRequest;
+import geoRural.usuario.dto.MunicipiosResponse;
 import geoRural.usuario.dto.PerfisRequest;
 import geoRural.usuario.dto.UsuarioResponse;
 import geoRural.usuario.service.UsuarioService;
@@ -47,5 +49,23 @@ public class UsuarioController {
             @AuthenticationPrincipal Jwt jwt) {
 
         return service.definirPerfis(id, corpo.perfis(), jwt.getSubject());
+    }
+
+    @Operation(summary = "Cidades que o usuário pode consultar",
+            description = "Só restringe o perfil ANALISTA. todas = true quando não há nenhuma cidade na lista.")
+    @GetMapping("/{id}/municipios")
+    public MunicipiosResponse municipios(@PathVariable String id) {
+        return service.municipios(id);
+    }
+
+    @Operation(summary = "Define as cidades que o usuário pode consultar (substitui a lista atual)",
+            description = "todas = true, ou lista vazia, libera o Paraná inteiro.")
+    @PutMapping("/{id}/municipios")
+    public MunicipiosResponse definirMunicipios(
+            @PathVariable String id,
+            @RequestBody MunicipiosRequest corpo,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        return service.definirMunicipios(id, corpo, jwt.getClaimAsString("preferred_username"));
     }
 }
