@@ -1,5 +1,7 @@
 package geoRural.indicator.service;
 
+import geoRural.acesso.AcessoTerritorial;
+import geoRural.usuario.repository.UsuarioMunicipioRepository;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.exception.ResourceNotFoundException;
 import geoRural.indicator.dto.IndicatorDefinitionRequest;
@@ -41,7 +43,8 @@ class IndicatorDefinitionServiceTest {
     private final FonteRepository fonteRepository = mock(FonteRepository.class);
     private final AirflowClient airflow = mock(AirflowClient.class);
     private final IndicatorDefinitionService service =
-            new IndicatorDefinitionServiceImpl(repository, resultRepository, fonteRepository, airflow);
+            new IndicatorDefinitionServiceImpl(repository, resultRepository, fonteRepository, airflow,
+                    new AcessoTerritorial(mock(UsuarioMunicipioRepository.class)));
 
     @BeforeEach
     void sourceWithPoints() {

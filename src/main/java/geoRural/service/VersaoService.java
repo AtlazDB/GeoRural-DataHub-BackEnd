@@ -10,6 +10,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import geoRural.acesso.AcessoTerritorial;
 import geoRural.dto.ComparacaoImovelResponse;
 import geoRural.dto.IndicadorCadastradoResultado;
 import geoRural.dto.IndicadorResponse;
@@ -32,11 +33,14 @@ public class VersaoService {
     private final VersaoRepository versoes;
     private final IndicadorRepository indicadores;
     private final FonteRepository fontes;
+    private final AcessoTerritorial acesso;
 
-    public VersaoService(VersaoRepository versoes, IndicadorRepository indicadores, FonteRepository fontes) {
+    public VersaoService(VersaoRepository versoes, IndicadorRepository indicadores, FonteRepository fontes,
+                         AcessoTerritorial acesso) {
         this.versoes = versoes;
         this.indicadores = indicadores;
         this.fontes = fontes;
+        this.acesso = acesso;
     }
 
     public List<VersaoFonteResponse> versoesDaFonte(Long fonteId) {
@@ -150,6 +154,7 @@ public class VersaoService {
     }
 
     private List<VersaoImovelResponse> versoesDoImovel(String codImovel) {
+        acesso.exigirImovel(codImovel);
         if (!versoes.imovelExiste(codImovel)) {
             throw new ImovelNaoEncontradoException(codImovel);
         }
