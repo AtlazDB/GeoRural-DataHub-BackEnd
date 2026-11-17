@@ -129,6 +129,33 @@ class AirflowClientTest {
                 .hasMessageContaining("Não foi possível falar com o Airflow");
     }
 
+    @Test
+    void cancelarEncerraSoAsExecucoesDoArquivo() {
+        List<String> encerradas = Collections.synchronizedList(new ArrayList<>());
+        List<String> filtros = Collections.synchronizedList(new ArrayList<>());
+        servidor.createContext("/api/v2/dags/processar_arquivo/dagRuns", troca -> {
+            if (troca.getRequestMethod().equals("PATCH")) {
+                encerradas.add(troca.getRequestURI().getRawPath() + " "
+                        + new String(troca.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                responder(troca, 200, "{}");
+            } else {
+                filtros.add(troca.getRequestURI().getQuery());
+                responder(troca, 200, """
+                        {"dag_runs": [
+                          {"dag_run_id": "manual__1 a", "conf": {"arquivo_bruto_id": 42}},
+                          {"dag_run_id": "manual__2", "conf": {"arquivo_bruto_id": 7}}
+                        ]}""");
+            }
+        });
+
+        int canceladas = cliente("", 30).cancelar("processar_arquivo", "arquivo_bruto_id", 42);
+
+        assertThat(canceladas).isEqualTo(1);
+        assertThat(filtros).containsExactly("state=queued&state=running&limit=100");
+        assertThat(encerradas).containsExactly(
+                "/api/v2/dags/processar_arquivo/dagRuns/manual__1%20a {\"state\": \"failed\"}");
+    }
+
     private AirflowClient cliente(String usuario, long espera) {
         return new AirflowClient(mapper, base + "/", usuario, "senha", espera);
     }

@@ -2,6 +2,7 @@ package geoRural.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.Formula;
 
 import java.time.OffsetDateTime;
 
@@ -54,9 +55,23 @@ public class ArquivoBruto {
     @Column(name = "ORIGEM", nullable = false)
     private String origem = ORIGEM_UPLOAD;
 
+    /**
+     * Progresso (0 a 100) da execução em andamento, que o DAG grava (V28). Nulo quando não há
+     * execução em andamento. Só leitura: é um SELECT, não uma coluna desta tabela.
+     */
+    @Formula("(SELECT MAX(e.progress) FROM execucao e WHERE e.arquivo_bruto_id = id AND e.status = 'EM_ANDAMENTO')")
+    private Integer progress;
+
+    /** Etapa da execução em andamento (DOWNLOAD, LEITURA, GRAVACAO, CONCLUSAO...). */
+    @Formula("(SELECT MAX(e.progress_step) FROM execucao e WHERE e.arquivo_bruto_id = id AND e.status = 'EM_ANDAMENTO')")
+    private String progressStep;
+
     // Getters e Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public Integer getProgress() { return progress; }
+    public String getProgressStep() { return progressStep; }
 
     public String getOrigem() { return origem; }
     public void setOrigem(String origem) { this.origem = origem; }

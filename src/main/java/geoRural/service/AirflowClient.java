@@ -84,6 +84,27 @@ public class AirflowClient {
                 null, token).path("value");
     }
 
+    /**
+     * Encerra as execuções da DAG ainda na fila ou rodando cujo `conf` tem {@code chave = valor}:
+     * marca cada uma como failed, e o Airflow derruba a tarefa em andamento. Devolve quantas encerrou.
+     */
+    public int cancelar(String dagId, String chave, long valor) {
+        String token = token();
+        String execucoes = "/api/v2/dags/" + dagId + "/dagRuns";
+        JsonNode lista = pedir("GET", execucoes + "?state=queued&state=running&limit=100", null, token);
+        int canceladas = 0;
+        for (JsonNode execucao : lista.path("dag_runs")) {
+            if (execucao.path("conf").path(chave).asLong(-1) != valor) {
+                continue;
+            }
+            String id = URLEncoder.encode(execucao.path("dag_run_id").asText(), StandardCharsets.UTF_8)
+                    .replace("+", "%20");
+            pedir("PATCH", execucoes + "/" + id, "{\"state\": \"failed\"}", token);
+            canceladas++;
+        }
+        return canceladas;
+    }
+
     private String disparar(String dagId, Map<String, Object> conf, String token) {
         // DAG pausada aceita o disparo e a execução fica na fila para sempre: melhor avisar agora.
         if (pedir("GET", "/api/v2/dags/" + dagId, null, token).path("is_paused").asBoolean()) {

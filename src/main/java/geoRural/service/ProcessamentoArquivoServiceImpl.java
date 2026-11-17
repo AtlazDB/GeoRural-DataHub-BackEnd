@@ -9,6 +9,7 @@ import geoRural.dto.ProcessamentoResponse;
 import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.ArquivoNaoEncontradoException;
 import geoRural.exception.ProcessamentoEmAndamentoException;
+import geoRural.exception.ProcessamentoNaoEmAndamentoException;
 
 /**
  * Quem processa é o Airflow: aqui o arquivo, de qualquer fonte, é reservado (PROCESSANDO) e a DAG
@@ -52,5 +53,36 @@ public class ProcessamentoArquivoServiceImpl implements ProcessamentoArquivoServ
             throw e;
         }
         return ProcessamentoResponse.disparado(arquivoId);
+    }
+
+    /**
+     * Encerra a execução no Airflow primeiro e só depois marca o arquivo: se o Airflow estiver fora
+     * do ar (503), o arquivo continua PROCESSANDO, coerente com o que de fato está rodando.
+     * Os blocos que a DAG já confirmou ficam gravados, como em qualquer falha no meio; processar
+     * de novo refaz a carga inteira pelo MERGE.
+     */
+    @Override
+    public ProcessamentoResponse cancelar(Long arquivoId) {
+        String status = jdbc.query("SELECT status FROM arquivo_bruto WHERE id = ?",
+                rs -> rs.next() ? rs.getString(1) : null, arquivoId);
+        if (status == null) {
+            throw new ArquivoNaoEncontradoException(arquivoId);
+        }
+        if (!"PROCESSANDO".equals(status)) {
+            throw new ProcessamentoNaoEmAndamentoException(arquivoId);
+        }
+        // Mesmo sem execução viva no Airflow (arquivo preso em PROCESSANDO), o arquivo é liberado.
+        airflow.cancelar(DAG_PROCESSAR, "arquivo_bruto_id", arquivoId);
+
+        jdbc.update("""
+                UPDATE execucao SET status = 'FALHOU', finalizada_em = SYSTIMESTAMP,
+                       mensagem_erro = 'Cancelado pelo usuário.'
+                 WHERE arquivo_bruto_id = ? AND status = 'EM_ANDAMENTO'
+                """, arquivoId);
+        jdbc.update("""
+                UPDATE arquivo_bruto SET status = 'REJEITADO', processado_em = SYSTIMESTAMP
+                 WHERE id = ? AND status = 'PROCESSANDO'
+                """, arquivoId);
+        return ProcessamentoResponse.cancelado(arquivoId);
     }
 }
