@@ -1,6 +1,10 @@
 {
   "realm": "georural",
   "displayName": "GeoRural DataHub",
+  "loginTheme": "georural",
+  "internationalizationEnabled": true,
+  "supportedLocales": ["pt-BR"],
+  "defaultLocale": "pt-BR",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,
