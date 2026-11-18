@@ -30,6 +30,9 @@ services:
       # Sem volume de dados de propósito: o realm vive no JSON (versionado), então
       # recriar o container sempre volta ao estado do repositório.
       - ./keycloak:/opt/keycloak/data/import:ro
+      # T29: tema visual da tela de login (pasta keycloak-theme/georural). Em start-dev o Keycloak
+      # não guarda cache de tema: editar o CSS e atualizar o navegador basta.
+      - ./keycloak-theme:/opt/keycloak/themes:ro
 
 volumes:
   oracle-data:

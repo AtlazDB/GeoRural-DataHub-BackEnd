@@ -1,0 +1,154 @@
+/*
+ * GeoRural DataHub - tema de login (T29).
+ * Mesmo visual do sistema: fundo slate-950, cartao translucido, gradiente ciano -> indigo.
+ * Carrega DEPOIS do css do tema padrao (ver theme.properties), entao so sobrescrevemos o que muda.
+ * Em start-dev o Keycloak nao guarda cache de tema: salvar e atualizar o navegador (Ctrl+F5) basta.
+ */
+
+:root {
+  --gr-fundo: #020617;
+  --gr-cartao: rgba(15, 23, 42, 0.72);
+  --gr-campo: rgba(15, 23, 42, 0.6);
+  --gr-borda: #1e293b;
+  --gr-borda-campo: #334155;
+  --gr-texto: #f1f5f9;
+  --gr-texto-suave: #94a3b8;
+  --gr-ciano: #06b6d4;
+  --gr-indigo: #6366f1;
+  --gr-destaque: #67e8f9;
+}
+
+/* ---- Fundo da pagina ---- */
+html,
+body,
+.pf-v5-c-login {
+  --pf-v5-c-login--BackgroundImage: none;
+  background:
+    radial-gradient(60rem 40rem at 10% -10%, rgba(6, 182, 212, 0.18), transparent 60%),
+    radial-gradient(50rem 40rem at 100% 110%, rgba(99, 102, 241, 0.2), transparent 60%),
+    var(--gr-fundo);
+  background-attachment: fixed;
+  color: var(--gr-texto);
+}
+
+/* ---- Cabecalho: icone do sistema + nome do realm ---- */
+#kc-header-wrapper {
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-transform: none;
+  white-space: normal;
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  display: block;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 0.75rem;
+  border-radius: 16px;
+  background:
+    url("../img/logo.svg") center / 56% no-repeat,
+    linear-gradient(135deg, #22d3ee, #34d399 45%, #6366f1);
+  box-shadow: 0 10px 25px -5px rgba(6, 182, 212, 0.35);
+}
+
+/* ---- Cartao do formulario ---- */
+.pf-v5-c-login__main {
+  --pf-v5-c-login__main--BackgroundColor: var(--gr-cartao);
+  background: var(--gr-cartao);
+  border: 1px solid var(--gr-borda);
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.pf-v5-c-login__main-header,
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-footer {
+  background: transparent;
+}
+
+#kc-page-title,
+.pf-v5-c-login__main-header .pf-v5-c-title {
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Rotulos, textos de apoio e links ---- */
+.pf-v5-c-form__label-text,
+.pf-v5-c-check__label {
+  color: #cbd5e1;
+}
+
+.pf-v5-c-login__main-footer-band,
+.pf-v5-c-helper-text__item-text,
+#kc-registration,
+#kc-info {
+  color: var(--gr-texto-suave);
+}
+
+.pf-v5-c-login__main a,
+.pf-v5-c-button.pf-m-link {
+  color: var(--gr-destaque);
+}
+
+.pf-v5-c-login__main a:hover,
+.pf-v5-c-button.pf-m-link:hover {
+  color: #a5f3fc;
+}
+
+/* ---- Campos ---- */
+.pf-v5-c-form-control {
+  --pf-v5-c-form-control--BackgroundColor: var(--gr-campo);
+  --pf-v5-c-form-control--Color: var(--gr-texto);
+  --pf-v5-c-form-control--BorderColor: var(--gr-borda-campo);
+  --pf-v5-c-form-control--hover--BorderColor: #64748b;
+  background-color: var(--gr-campo);
+  color: var(--gr-texto);
+  border-radius: 0.5rem;
+}
+
+.pf-v5-c-form-control input,
+.pf-v5-c-form-control input::placeholder {
+  color: var(--gr-texto);
+  background: transparent;
+}
+
+.pf-v5-c-form-control:focus-within {
+  box-shadow: 0 0 0 1px var(--gr-ciano);
+}
+
+/* Preenchimento automatico do Chrome: sem o fundo claro padrao. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--gr-texto);
+  box-shadow: 0 0 0 1000px #0f172a inset;
+  caret-color: var(--gr-texto);
+}
+
+/* ---- Botoes ---- */
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--Color: #04111d;
+  background-image: linear-gradient(135deg, var(--gr-ciano), var(--gr-indigo));
+  border: 0;
+  border-radius: 0.5rem;
+  color: #04111d;
+  font-weight: 600;
+  box-shadow: 0 10px 20px -8px rgba(6, 182, 212, 0.45);
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+.pf-v5-c-button.pf-m-primary:focus {
+  filter: brightness(1.08);
+  color: #04111d;
+}
+
+.pf-v5-c-button.pf-m-secondary {
+  border-radius: 0.5rem;
+}
