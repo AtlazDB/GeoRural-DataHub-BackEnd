@@ -39,6 +39,10 @@ public class ColetaLinkServiceImpl implements ColetaLinkService {
     @Override
     public ColetaResponse executar(Long fonteId) {
         Fonte fonte = fonteService.buscarPorId(fonteId);
+        if (!fonte.isAtiva()) {
+            throw new RequisicaoInvalidaException(
+                    "A fonte " + fonte.getSigla() + " está desativada: ative a fonte para coletar.");
+        }
         if (fonte.getUrlOrigem() == null || fonte.getUrlOrigem().isBlank()) {
             throw new RequisicaoInvalidaException(
                     "Esta fonte não tem link de origem: cadastre a URL para poder coletar.", List.of("urlOrigem"));

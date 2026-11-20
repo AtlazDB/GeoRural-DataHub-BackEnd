@@ -113,6 +113,14 @@ public class FonteServiceImpl implements FonteService {
     }
 
     @Override
+    @Transactional
+    public Fonte alterarAtiva(Long id, boolean ativa) {
+        Fonte fonte = buscarPorId(id);
+        fonte.setAtiva(ativa);
+        return repository.save(fonte);
+    }
+
+    @Override
     public Fonte buscarPorId(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new FonteNaoEncontradaException(id));
