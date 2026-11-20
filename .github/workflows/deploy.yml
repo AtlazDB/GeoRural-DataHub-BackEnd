@@ -1,8 +1,8 @@
-# Deploy automatico: todo push na main (merge de PR) verifica o back e publica na VM.
+# Deploy automatico: todo push na dev (merge de PR) verifica o back e publica na VM.
 #
 # Como funciona: o job "deploy" entra na VM por SSH com uma chave dedicada. Na VM, essa
 # chave esta presa a um unico comando (command= no authorized_keys), que roda o deploy.sh:
-# ele baixa back e front da main e reconstroi os containers. Mesmo que a chave vaze, ela
+# ele baixa back e front da dev e reconstroi os containers. Mesmo que a chave vaze, ela
 # so consegue disparar um deploy.
 #
 # Segredos necessarios (Settings > Secrets and variables > Actions, no repositorio ou na
@@ -12,13 +12,13 @@
 #   VM_SSH_KEY      chave privada dedicada ao deploy (a publica fica no authorized_keys da VM)
 #   VM_KNOWN_HOSTS  saida de "ssh-keyscan -H <IP da VM>" (garante que e a VM certa)
 #
-# O mesmo workflow existe no Atlaz4-FrontEnd: merge em qualquer um dos dois publica os dois.
+# O mesmo workflow existe no GeoRural-DataHub-FrontEnd: merge em qualquer um dos dois publica os dois.
 
 name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [dev] # a dev e a branch estavel; o deploy.sh publica a dev
   workflow_dispatch: # permite disparar na mao pela aba Actions
 
 # Um deploy por vez neste repositorio; o que chegar depois espera o anterior terminar.
