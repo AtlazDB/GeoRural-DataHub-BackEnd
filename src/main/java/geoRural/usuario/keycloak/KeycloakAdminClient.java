@@ -2,6 +2,8 @@ package geoRural.usuario.keycloak;
 
 import geoRural.config.KeycloakAdminProperties;
 import geoRural.usuario.exception.KeycloakIndisponivelException;
+import geoRural.usuario.exception.PerfilDuplicadoException;
+import geoRural.usuario.exception.SenhaRecusadaException;
 import geoRural.usuario.exception.UsuarioDuplicadoException;
 import geoRural.usuario.exception.UsuarioNaoEncontradoException;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -166,6 +168,135 @@ public class KeycloakAdminClient {
         }
     }
 
+    /** Liga ou desliga o login do usuário (campo enabled do Keycloak). Não mexe em perfis nem cidades. */
+    public void alterarAtivo(String usuarioId, boolean ativo) {
+        try {
+            chamar(() -> http.put()
+                    .uri("/admin/realms/{realm}/users/{id}", props.realm(), usuarioId)
+                    .headers(h -> h.setBearerAuth(token()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("enabled", ativo))
+                    .retrieve()
+                    .toBodilessEntity());
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new UsuarioNaoEncontradoException(usuarioId);
+        }
+    }
+
+    /**
+     * Redefine a senha (perda ou esquecimento). Provisória: o Keycloak pede uma nova no próximo
+     * login, como na criação. Senha fora das regras do realm: SenhaRecusadaException (400).
+     */
+    public void redefinirSenha(String usuarioId, String senha) {
+        Map<String, Object> corpo = Map.of("type", "password", "value", senha, "temporary", true);
+        try {
+            chamar(() -> http.put()
+                    .uri("/admin/realms/{realm}/users/{id}/reset-password", props.realm(), usuarioId)
+                    .headers(h -> h.setBearerAuth(token()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(corpo)
+                    .retrieve()
+                    .toBodilessEntity());
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new UsuarioNaoEncontradoException(usuarioId);
+        } catch (KeycloakIndisponivelException e) {
+            // O chamar() embrulha o 400; aqui ele quer dizer senha recusada, não Keycloak fora do ar.
+            if (e.getCause() instanceof HttpClientErrorException.BadRequest) {
+                throw new SenhaRecusadaException();
+            }
+            throw e;
+        }
+    }
+
+    // ------------------------------------------------- perfis combinados (roles)
+
+    /** Todas as roles de realm, com descrição e atributos (para achar os perfis criados pela tela). */
+    public List<KcPerfilCompleto> listarPerfisDoRealm() {
+        List<KcPerfilCompleto> lista = chamar(() -> http.get()
+                .uri(u -> u.path("/admin/realms/{realm}/roles")
+                        .queryParam("briefRepresentation", false)
+                        .queryParam("first", 0)
+                        .queryParam("max", 500)
+                        .build(props.realm()))
+                .headers(h -> h.setBearerAuth(token()))
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<KcPerfilCompleto>>() {}));
+        return lista == null ? List.of() : lista;
+    }
+
+    /** Os perfis que um perfil combinado inclui (composites). */
+    public List<KcPerfil> compostosDoPerfil(String nome) {
+        try {
+            List<KcPerfil> lista = chamar(() -> http.get()
+                    .uri("/admin/realms/{realm}/roles/{nome}/composites", props.realm(), nome)
+                    .headers(h -> h.setBearerAuth(token()))
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<KcPerfil>>() {}));
+            return lista == null ? List.of() : lista;
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new PerfilInvalidoException(nome);
+        }
+    }
+
+    /**
+     * Cria a role, marcada com o atributo georural = perfil (é assim que a tela reconhece os perfis
+     * que ela criou). Nome repetido: 409. Exige a permissão manage-realm na conta técnica.
+     */
+    public void criarPerfil(String nome, String descricao) {
+        Map<String, Object> corpo = Map.of(
+                "name", nome,
+                "description", descricao == null ? "" : descricao,
+                "attributes", Map.of(ATRIBUTO_PERFIL, List.of(VALOR_PERFIL)));
+        try {
+            chamar(() -> http.post()
+                    .uri("/admin/realms/{realm}/roles", props.realm())
+                    .headers(h -> h.setBearerAuth(token()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(corpo)
+                    .retrieve()
+                    .toBodilessEntity());
+        } catch (HttpClientErrorException.Conflict e) {
+            throw new PerfilDuplicadoException(nome);
+        }
+    }
+
+    /** Faz o perfil combinado incluir os perfis dados: quem recebe o combinado ganha todos eles. */
+    public void adicionarCompostos(String nome, List<KcPerfil> incluidos) {
+        chamar(() -> http.post()
+                .uri("/admin/realms/{realm}/roles/{nome}/composites", props.realm(), nome)
+                .headers(h -> h.setBearerAuth(token()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(incluidos)
+                .retrieve()
+                .toBodilessEntity());
+    }
+
+    /**
+     * Troca a descrição da role. O Keycloak regrava nome, descrição e atributos juntos, então o
+     * nome e a marca georural = perfil vão de novo, iguais.
+     */
+    public void atualizarDescricaoPerfil(String nome, String descricao) {
+        Map<String, Object> corpo = Map.of(
+                "name", nome,
+                "description", descricao == null ? "" : descricao,
+                "attributes", Map.of(ATRIBUTO_PERFIL, List.of(VALOR_PERFIL)));
+        try {
+            chamar(() -> http.put()
+                    .uri("/admin/realms/{realm}/roles/{nome}", props.realm(), nome)
+                    .headers(h -> h.setBearerAuth(token()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(corpo)
+                    .retrieve()
+                    .toBodilessEntity());
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new PerfilInvalidoException(nome);
+        }
+    }
+
+    /** Atributo que marca, no Keycloak, as roles criadas pela tela de perfis. */
+    public static final String ATRIBUTO_PERFIL = "georural";
+    public static final String VALOR_PERFIL = "perfil";
+
     // ------------------------------------------------------------------- apoio
 
     /**
@@ -180,6 +311,10 @@ public class KeycloakAdminClient {
         } catch (HttpClientErrorException.Unauthorized e) {
             esquecerToken();
             throw new KeycloakIndisponivelException("O Keycloak recusou a credencial técnica do back.", e);
+        } catch (HttpClientErrorException.Forbidden e) {
+            // Ex.: criar perfil sem a permissão manage-realm na conta técnica (realm-management).
+            throw new KeycloakIndisponivelException(
+                    "A conta técnica georural-backend não tem permissão para esta operação no Keycloak.", e);
         } catch (RestClientException e) {
             throw new KeycloakIndisponivelException("Não foi possível falar com o Keycloak.", e);
         }
