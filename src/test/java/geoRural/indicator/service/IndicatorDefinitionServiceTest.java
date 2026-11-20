@@ -315,6 +315,41 @@ class IndicatorDefinitionServiceTest {
         verify(repository, never()).insert(any());
     }
 
+    // ---- mínimo exigido (parameters.minimumPercent, IRL)
+
+    @Test
+    void acceptsMinimumPercentInAreaCoverage() {
+        polygonSource(SOURCE);
+        when(repository.findByCode("DESM08")).thenReturn(Optional.of(saved("DESM08")));
+
+        service.create(withParameters("AREA_COVERAGE", Map.of("minimumPercent", 20)));
+
+        verify(repository).insert(any(IndicatorDefinitionRequest.class));
+    }
+
+    @Test
+    void rejectsMinimumPercentOutOfRange() {
+        polygonSource(SOURCE);
+
+        for (Object minimum : List.of(0, -5, 101, "vinte")) {
+            assertThatThrownBy(() -> service.create(withParameters("AREA_COVERAGE", Map.of("minimumPercent", minimum))))
+                    .as(String.valueOf(minimum))
+                    .isInstanceOf(RequisicaoInvalidaException.class)
+                    .hasMessageContaining("maior que 0 e até 100");
+        }
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
+    void minimumPercentIsRefusedInOtherModels() {
+        when(repository.findGeometryTypesBySource(SOURCE)).thenReturn(List.of(1));
+
+        assertThatThrownBy(() -> service.create(withParameters("POINT_DENSITY", Map.of("minimumPercent", 20))))
+                .isInstanceOf(RequisicaoInvalidaException.class)
+                .hasMessageContaining("só vale para a cobertura de área");
+        verify(repository, never()).insert(any());
+    }
+
     // ---- agregação por município (D4)
 
     @Test
@@ -418,6 +453,23 @@ class IndicatorDefinitionServiceTest {
         service.deactivate("DFOCO");
 
         verify(repository).deactivate("DFOCO");
+    }
+
+    @Test
+    void activatesAgain() {
+        when(repository.activate("DFOCO")).thenReturn(true);
+
+        service.activate("DFOCO");
+
+        verify(repository).activate("DFOCO");
+    }
+
+    @Test
+    void activateThrowsNotFoundWhenMissing() {
+        when(repository.activate("NADA")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.activate("NADA"))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

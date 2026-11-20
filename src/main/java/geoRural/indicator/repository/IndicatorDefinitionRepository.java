@@ -72,6 +72,11 @@ public class IndicatorDefinitionRepository {
         return jdbc.update("UPDATE indicator_definition SET active = 0 WHERE code = ?", code) > 0;
     }
 
+    // Liga de novo, com a mesma regra. Devolve false se a sigla não existe.
+    public boolean activate(String code) {
+        return jdbc.update("UPDATE indicator_definition SET active = 1 WHERE code = ?", code) > 0;
+    }
+
 
      // Tipos de geometria que a fonte tem na input_feature (vazio = ainda sem dados).
      // 1 = ponto, 2 = linha, 3 = polígono, 5 = multiponto, 6 = multilinha, 7 = multipolígono.

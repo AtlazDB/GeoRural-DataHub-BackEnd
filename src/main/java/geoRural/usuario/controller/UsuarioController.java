@@ -1,9 +1,13 @@
 package geoRural.usuario.controller;
 
+import geoRural.usuario.dto.DescricaoPerfilRequest;
 import geoRural.usuario.dto.MunicipiosRequest;
 import geoRural.usuario.dto.MunicipiosResponse;
+import geoRural.usuario.dto.NovoPerfilRequest;
 import geoRural.usuario.dto.NovoUsuarioRequest;
+import geoRural.usuario.dto.PerfilResponse;
 import geoRural.usuario.dto.PerfisRequest;
+import geoRural.usuario.dto.SenhaRequest;
 import geoRural.usuario.dto.UsuarioResponse;
 import geoRural.usuario.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,6 +50,27 @@ public class UsuarioController {
         return service.criar(corpo, jwt.getClaimAsString("preferred_username"));
     }
 
+    @Operation(summary = "Perfis que podem ser atribuídos: os 4 do sistema e os combinados")
+    @GetMapping("/perfis")
+    public List<PerfilResponse> perfis() {
+        return service.listarPerfis();
+    }
+
+    @Operation(summary = "Cria um perfil combinado (junta perfis do sistema)",
+            description = "Vira uma role composta no Keycloak. Nome repetido responde 409.")
+    @PostMapping("/perfis")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PerfilResponse criarPerfil(@Valid @RequestBody NovoPerfilRequest corpo) {
+        return service.criarPerfil(corpo);
+    }
+
+    @Operation(summary = "Muda a descrição de um perfil combinado",
+            description = "Os 4 perfis do sistema não podem ser editados (409).")
+    @PutMapping("/perfis/{nome}")
+    public PerfilResponse editarPerfil(@PathVariable String nome, @Valid @RequestBody DescricaoPerfilRequest corpo) {
+        return service.editarDescricaoPerfil(nome, corpo.descricao());
+    }
+
     @Operation(summary = "Um usuário com seus perfis")
     @GetMapping("/{id}")
     public UsuarioResponse buscar(@PathVariable String id) {
@@ -60,6 +85,27 @@ public class UsuarioController {
             @AuthenticationPrincipal Jwt jwt) {
 
         return service.definirPerfis(id, corpo.perfis(), jwt.getSubject());
+    }
+
+    @Operation(summary = "Redefine a senha do usuário (perda ou esquecimento)",
+            description = "A senha é provisória: o Keycloak pede uma nova no próximo login. 204 · 400 · 404.")
+    @PostMapping("/{id}/senha")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void redefinirSenha(@PathVariable String id, @Valid @RequestBody SenhaRequest corpo) {
+        service.redefinirSenha(id, corpo.senhaProvisoria());
+    }
+
+    @Operation(summary = "Ativa o usuário (volta a conseguir entrar)")
+    @PostMapping("/{id}/ativar")
+    public UsuarioResponse ativar(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+        return service.alterarAtivo(id, true, jwt.getSubject());
+    }
+
+    @Operation(summary = "Desativa o usuário (não consegue entrar; perfis e cidades ficam guardados)",
+            description = "O gestor não pode desativar a si mesmo.")
+    @PostMapping("/{id}/desativar")
+    public UsuarioResponse desativar(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+        return service.alterarAtivo(id, false, jwt.getSubject());
     }
 
     @Operation(summary = "Cidades que o usuário pode consultar",

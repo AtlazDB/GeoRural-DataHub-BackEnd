@@ -25,7 +25,8 @@ public class UsuarioExceptionHandler {
     @ExceptionHandler(PerfilInvalidoException.class)
     public ResponseEntity<ErroResponse> perfilInvalido(PerfilInvalidoException e) {
         String msg = e.getMessage()
-                + ". Perfis aceitos: OPERADOR_DADOS, ANALISTA, AUDITOR, GESTOR.";
+                + ". Use um dos 4 perfis do sistema (OPERADOR_DADOS, ANALISTA, AUDITOR, GESTOR) "
+                + "ou um perfil criado na tela (GET /usuarios/perfis).";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErroResponse.de(msg));
     }
 
@@ -36,6 +37,16 @@ public class UsuarioExceptionHandler {
 
     @ExceptionHandler(UsuarioDuplicadoException.class)
     public ResponseEntity<ErroResponse> usuarioDuplicado(UsuarioDuplicadoException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(e.getMessage()));
+    }
+
+    @ExceptionHandler(SenhaRecusadaException.class)
+    public ResponseEntity<ErroResponse> senhaRecusada(SenhaRecusadaException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErroResponse.de(e.getMessage()));
+    }
+
+    @ExceptionHandler(PerfilDuplicadoException.class)
+    public ResponseEntity<ErroResponse> perfilDuplicado(PerfilDuplicadoException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(e.getMessage()));
     }
 

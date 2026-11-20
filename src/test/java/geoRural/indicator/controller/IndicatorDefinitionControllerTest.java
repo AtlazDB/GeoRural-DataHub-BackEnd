@@ -152,6 +152,14 @@ class IndicatorDefinitionControllerTest {
     }
 
     @Test
+    void activateRespondsNoContent() throws Exception {
+        mockMvc.perform(post("/api/v1/indicators/DFOCO/activate"))
+                .andExpect(status().isNoContent());
+
+        verify(service).activate("DFOCO");
+    }
+
+    @Test
     void calculateRespondsAccepted() throws Exception {
         mockMvc.perform(post("/api/v1/indicators/DFOCO/calculate"))
                 .andExpect(status().isAccepted());

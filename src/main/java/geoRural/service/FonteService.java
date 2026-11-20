@@ -20,5 +20,11 @@ public interface FonteService {
 
     Fonte buscarPorId(Long id);
 
+    /**
+     * Liga ou desliga a fonte (chave do card na tela de fontes). Fonte desativada não recebe
+     * arquivo nem coleta; os dados que ela já trouxe continuam valendo.
+     */
+    Fonte alterarAtiva(Long id, boolean ativa);
+
 
 }

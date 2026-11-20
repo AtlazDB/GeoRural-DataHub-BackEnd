@@ -63,6 +63,21 @@ class ColetaLinkServiceTest {
     }
 
     @Test
+    void fonteDesativadaERecusada() {
+        Fonte fonte = new Fonte();
+        fonte.setSigla("FOCOS");
+        fonte.setUrlOrigem("https://geo.iat.pr.gov.br/arcgis/rest/services/Focos/FeatureServer/0/query");
+        fonte.setAtiva(false);
+        when(fontes.buscarPorId(6L)).thenReturn(fonte);
+
+        assertThatThrownBy(() -> coleta.executar(6L))
+                .isInstanceOf(RequisicaoInvalidaException.class)
+                .hasMessageContaining("desativada");
+        verify(repositorio, never()).save(any());
+        verify(airflow, never()).disparar(anyString(), any());
+    }
+
+    @Test
     void fonteSemLinkERecusada() {
         Fonte fonte = new Fonte();
         fonte.setUrlOrigem("  ");

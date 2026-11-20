@@ -76,6 +76,20 @@ public class FonteController {
         return toResponse(fonteService.atualizar(id, request));
     }
 
+    /** Liga a fonte de novo: volta a aceitar arquivo e coleta. 200 com a fonte · 404. */
+    @Operation(summary = "Ativa a fonte")
+    @PostMapping("/{id}/ativar")
+    public FonteResponse ativar(@PathVariable Long id) {
+        return toResponse(fonteService.alterarAtiva(id, true));
+    }
+
+    /** Desliga a fonte: recusa arquivo e coleta, mas os dados já carregados continuam. 200 · 404. */
+    @Operation(summary = "Desativa a fonte (não apaga nada)")
+    @PostMapping("/{id}/desativar")
+    public FonteResponse desativar(@PathVariable Long id) {
+        return toResponse(fonteService.alterarAtiva(id, false));
+    }
+
     @Operation(summary = "Envia um arquivo para a zona bruta")
     @PostMapping(value = "/{id}/arquivos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
