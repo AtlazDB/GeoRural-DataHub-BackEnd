@@ -65,6 +65,14 @@ public class IndicatorDefinitionController {
         service.deactivate(code);
     }
 
+    /** 204 · 404. Liga de novo, com a mesma regra; volta a poder ser calculado. */
+    @Operation(summary = "Ativa de novo um indicador desativado")
+    @PostMapping("/{code}/activate")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void activate(@PathVariable String code) {
+        service.activate(code);
+    }
+
     /**
      * 202 com o cálculo (NA_FILA) · 400 desativado · 404 · 409 já está sendo calculado · 503 Airflow fora do ar.
      * Só dispara a DAG calcular_indicador: o andamento aparece em GET /calculations/latest.

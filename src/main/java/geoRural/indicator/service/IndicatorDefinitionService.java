@@ -17,6 +17,9 @@ public interface IndicatorDefinitionService {
 
     void deactivate(String code);
 
+    /** Liga de novo um indicador desativado (a regra é a mesma de antes). */
+    void activate(String code);
+
     /**
      * Registra o cálculo (NA_FILA), dispara a DAG calcular_indicador no Airflow e volta logo (o
      * cálculo leva minutos). A DAG grava o andamento na mesma linha, para a barra da tela.

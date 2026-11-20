@@ -80,6 +80,7 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
         }
         validateSince(sources, request.parameters());
         validateBaseSources(request.calculationModel(), request.parameters());
+        validateMinimumPercent(request.calculationModel(), request.parameters());
         repository.insert(request);
         return findByCode(request.code());
     }
@@ -99,6 +100,14 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
     @Transactional
     public void deactivate(String code) {
         if (!repository.deactivate(code)) {
+            throw new ResourceNotFoundException("Indicador \"" + code + "\" não encontrado.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void activate(String code) {
+        if (!repository.activate(code)) {
             throw new ResourceNotFoundException("Indicador \"" + code + "\" não encontrado.");
         }
     }
@@ -277,6 +286,32 @@ public class IndicatorDefinitionServiceImpl implements  IndicatorDefinitionServi
                             ? "Densidade de pontos exige fontes só com pontos (a fonte " + fonteId + " tem outros tipos)."
                             : "Cobertura de área exige fontes só com polígonos (a fonte " + fonteId + " tem outros tipos).",
                     List.of("calculationModel"));
+        }
+    }
+
+    /**
+     * parameters.minimumPercent: o mínimo exigido, em % do imóvel (ex.: 20 para a Reserva Legal no
+     * Paraná). Opcional e só na cobertura de área. A DAG não usa: com ele, a tela mostra o saldo em
+     * hectares do imóvel (área coberta − mínimo × área do imóvel; negativo = déficit, positivo = excedente).
+     */
+    private void validateMinimumPercent(String calculationModel, Map<String, Object> parameters) {
+        Object value = parameters == null ? null : parameters.get("minimumPercent");
+        if (value == null) {
+            return;
+        }
+        if (!AREA_COVERAGE.equals(calculationModel)) {
+            throw new RequisicaoInvalidaException(
+                    "O mínimo exigido (minimumPercent) só vale para a cobertura de área.", List.of("parameters"));
+        }
+        BigDecimal minimum;
+        try {
+            minimum = new BigDecimal(value.toString());
+        } catch (NumberFormatException e) {
+            minimum = null;
+        }
+        if (minimum == null || minimum.signum() <= 0 || minimum.compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new RequisicaoInvalidaException(
+                    "O mínimo exigido deve ser um número maior que 0 e até 100 (%), ex.: 20.", List.of("parameters"));
         }
     }
 

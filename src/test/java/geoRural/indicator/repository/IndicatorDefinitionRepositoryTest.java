@@ -135,6 +135,10 @@ class IndicatorDefinitionRepositoryTest {
         assertThat(repository.deactivate(CODE)).isTrue();
         assertThat(repository.findByCode(CODE).orElseThrow().active()).isFalse();
         assertThat(repository.deactivate("NAOEXISTE")).isFalse();
+
+        assertThat(repository.activate(CODE)).isTrue();
+        assertThat(repository.findByCode(CODE).orElseThrow().active()).isTrue();
+        assertThat(repository.activate("NAOEXISTE")).isFalse();
     }
 
     private void inserirPonto() {
