@@ -4,6 +4,7 @@ import geoRural.exception.AirflowIndisponivelException;
 import geoRural.service.IndicadorService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -14,6 +15,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** POST /pipeline/indicadores: dispara a DAG calcular_indicadores e não espera o cálculo (US13.T10). */
+// Testa o comportamento do endpoint, não a matriz de perfis: sem os filtros do Spring Security.
+@AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(PipelineController.class)
 class PipelineControllerTest {
 

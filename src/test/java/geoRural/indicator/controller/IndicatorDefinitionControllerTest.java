@@ -16,6 +16,7 @@ import geoRural.indicator.exception.IndicatorCalculationInProgressException;
 import geoRural.indicator.service.IndicatorDefinitionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -39,6 +40,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** As rotas /api/v1/indicators: códigos HTTP e formato dos erros. As regras estão no IndicatorDefinitionServiceTest. */
+// Testa o comportamento do endpoint, não a matriz de perfis: sem os filtros do Spring Security.
+@AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(IndicatorDefinitionController.class)
 class IndicatorDefinitionControllerTest {
 
