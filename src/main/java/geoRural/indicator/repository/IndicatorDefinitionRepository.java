@@ -12,9 +12,11 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 // Indicadores cadastrados (indicator_definition) em SQL direto. {@code parameters} e
 // {@code ranges} são gravados como JSON, que a DAG de cálculo lê.
@@ -78,19 +80,40 @@ public class IndicatorDefinitionRepository {
     }
 
 
-     // Tipos de geometria que a fonte tem na input_feature (vazio = ainda sem dados).
+     // Tipos de geometria da fonte na input_feature (vazio = ainda sem dados).
      // 1 = ponto, 2 = linha, 3 = polígono, 5 = multiponto, 6 = multilinha, 7 = multipolígono.
      // A fonte de cada linha vem pela versão: dataset_versao -> execucao -> arquivo_bruto.
+     //
+     // Não lê todas as geometrias (o DISTINCT get_gtype() abria as 393 mil da vegetação e travava o
+     // cadastro por segundos): a carga já reprova a geometria de tipo diferente do mapeado
+     // (regras.py, "Tipo esperado"), então bastam uma feição de amostra e o tipo declarado no
+     // mapeamento. A amostra pega o mapeamento trocado depois da carga sem reprocessar.
 
     public List<Integer> findGeometryTypesBySource(Long fonteId) {
-        return jdbc.queryForList("""
-                SELECT DISTINCT f.geometria.get_gtype()
+        List<Integer> sample = jdbc.queryForList("""
+                SELECT f.geometria.get_gtype()
                   FROM input_feature f
                   JOIN dataset_versao dv ON dv.id = f.dataset_versao_id
                   JOIN execucao e        ON e.id  = dv.execucao_id
                   JOIN arquivo_bruto a   ON a.id  = e.arquivo_bruto_id
                  WHERE a.fonte_id = ?
+                 FETCH FIRST 1 ROW ONLY
                 """, Integer.class, fonteId);
+        if (sample.isEmpty()) {
+            return sample;
+        }
+        // Sem formato na regra, a carga trata como polígono (regras.py): o mesmo aqui.
+        List<Integer> declared = jdbc.queryForList("""
+                SELECT DISTINCT CASE UPPER(TRIM(NVL(rc.formato_origem, 'POLIGONO')))
+                                    WHEN 'PONTO' THEN 1 WHEN 'LINHA' THEN 2 ELSE 3 END
+                  FROM regra_campo rc
+                 WHERE rc.fonte_id = ?
+                   AND rc.tipo_dado = 'GEOMETRIA'
+                   AND LOWER(rc.destino_tabela) = 'input_feature'
+                """, Integer.class, fonteId);
+        Set<Integer> types = new LinkedHashSet<>(sample);
+        types.addAll(declared);
+        return List.copyOf(types);
     }
 
     public boolean hasReferenceDateBySource(Long fonteId) {
