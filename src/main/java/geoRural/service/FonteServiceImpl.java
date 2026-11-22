@@ -18,7 +18,7 @@ import java.util.Locale;
 @Service
 public class FonteServiceImpl implements FonteService {
 
-    private static final List<String> FORMATOS = List.of("CSV", "GeoJSON", "SHP", "XLSX", "JSON");
+    private static final List<String> FORMATOS = List.of("CSV", "GeoJSON", "SHP"); // só o que a ingestão lê
     private static final int SIGLA_MAX = 12;
     private static final List<String> MODALIDADES = List.of("MANUAL", "LINK");
     private static final List<String> METODOS = List.of("GET", "POST");
