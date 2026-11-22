@@ -1,11 +1,13 @@
 package geoRural.service;
 
+import geoRural.config.AgendamentoConfig;
 import geoRural.entity.Fonte;
 import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.RequisicaoInvalidaException;
 import geoRural.repository.FonteRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
@@ -35,6 +37,28 @@ class ColetaAutomaticaTest {
         repositorio = mock(FonteRepository.class);
         coleta = mock(ColetaLinkService.class);
         automatica = new ColetaAutomatica(repositorio, coleta, Clock.fixed(AGORA, AgendaColeta.FUSO));
+    }
+
+    @Test
+    void springConsegueCriarOComponenteQuandoHabilitado() {
+        new ApplicationContextRunner()
+                .withPropertyValues("app.coleta-automatica.habilitada=true")
+                .withBean(FonteRepository.class, () -> mock(FonteRepository.class))
+                .withBean(ColetaLinkService.class, () -> mock(ColetaLinkService.class))
+                .withUserConfiguration(AgendamentoConfig.class, ColetaAutomatica.class)
+                .run(contexto -> {
+                    assertThat(contexto).hasNotFailed();
+                    assertThat(contexto).hasSingleBean(ColetaAutomatica.class);
+                });
+    }
+
+    @Test
+    void desligadoPorPadrao() {
+        new ApplicationContextRunner()
+                .withBean(FonteRepository.class, () -> mock(FonteRepository.class))
+                .withBean(ColetaLinkService.class, () -> mock(ColetaLinkService.class))
+                .withUserConfiguration(AgendamentoConfig.class, ColetaAutomatica.class)
+                .run(contexto -> assertThat(contexto).doesNotHaveBean(ColetaAutomatica.class));
     }
 
     private static Fonte fonte(long id, String periodicidade, int diasDesdeAUltima) {

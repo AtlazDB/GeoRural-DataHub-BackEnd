@@ -35,11 +35,9 @@ public class ColetaAutomatica {
     private final ColetaLinkService coletaLinkService;
     private final Clock relogio;
 
-    public ColetaAutomatica(FonteRepository fonteRepository, ColetaLinkService coletaLinkService) {
-        this(fonteRepository, coletaLinkService, Clock.system(AgendaColeta.FUSO));
-    }
-
-    ColetaAutomatica(FonteRepository fonteRepository, ColetaLinkService coletaLinkService, Clock relogio) {
+    // Um construtor só: o Spring usa este sem precisar de anotação. O relógio vem do
+    // AgendamentoConfig (fuso de Brasília); os testes passam um relógio fixo.
+    public ColetaAutomatica(FonteRepository fonteRepository, ColetaLinkService coletaLinkService, Clock relogio) {
         this.fonteRepository = fonteRepository;
         this.coletaLinkService = coletaLinkService;
         this.relogio = relogio;
