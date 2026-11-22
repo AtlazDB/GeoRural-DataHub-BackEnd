@@ -1,5 +1,5 @@
 --------------------------------------------------------------------------------
--- GeoRural DataHub — Seed de demonstração: as 4 fontes 
+-- GeoRural DataHub — Seed de demonstração: as 5 fontes
 --------------------------------------------------------------------------------
 -- NÃO é migration: fica fora do Flyway e roda à mão, no banco onde a demo
 -- acontece (SQL Developer, SQLcl ou "Executar script"). Pode rodar de novo:
@@ -8,6 +8,8 @@
 -- O que cria
 --   MUN-IAT    Municípios do PR (IAT, ArcGIS)          -> municipio        (chave codibge)
 --   FOCOS-IAT  Focos de calor do INPE (IAT, ArcGIS)    -> foco_calor       (chave objectid)
+--              Parado desde 31/12/2025: fica como histórico, sem coleta automática.
+--   FOCOS-INPE Focos de calor do PR (INPE, WFS)        -> foco_calor       (chave foco_id)
 --   RL-IAT     Reserva Legal do CAR, PR inteiro (IAT)  -> car_reserva_legal (sem chave: carga-retrato)
 --   CAR-WFS    Imóveis do CAR, PR inteiro (SICAR, WFS) -> imovel_rural     (chave cod_imovel)
 --
@@ -20,10 +22,19 @@
 -- (caminho genérico) -> Tratada + quarentena -> indicadores.
 --
 -- Ordem sugerida na demo: MUN-IAT primeiro (é a referência do "fora do PR" e
--- do município dos imóveis), depois RL-IAT e FOCOS-IAT, e o CAR-WFS por último
+-- do município dos imóveis), depois RL-IAT e FOCOS-INPE, e o CAR-WFS por último
 -- (558 mil imóveis: a coleta leva de 1 a 2 horas).
 --
 -- Observações
+--   * FOCOS-INPE é o BDQueimadas direto do INPE (WFS público do TerraBrasilis):
+--     camada do ano corrente, todos os satélites (como o IAT publicava),
+--     filtrada no PR (id_1 = 41, o código IBGE da UF). Baixa o ano inteiro a
+--     cada coleta (~11 mil focos em nov/2026): pela chave foco_id nada duplica,
+--     e um dia sem coleta não deixa buraco. Os focos do IAT vão até 2025 e os do
+--     INPE começam em 2026, então as duas fontes não se sobrepõem. Na virada do
+--     ano a camada recomeça vazia, e os focos do ano anterior continuam na tabela.
+--     A data vem em ISO/UTC ("2026-11-03T16:45:00Z") e o município já vem com
+--     o código IBGE (id_2).
 --   * A chave dos focos é o objectid do IAT: se o IAT republicar a camada e
 --     renumerar, focos podem duplicar. Chave composta (data + satélite +
 --     coordenada) fica para a Sprint 3.
@@ -108,7 +119,9 @@ BEGIN
         p_formato => 'POLIGONO', p_politica => 'CORRIGIR_E_REGISTRAR');
 
   -- Focos de calor: ponto, conferido contra o PR.
-  fonte('FOCOS-IAT', 'Focos de calor do INPE no Paraná (IAT)', 'INPE (via IAT/PR)', 'diária',
+  -- O serviço do IAT parou em 31/12/2025: 'eventual' para a coleta automática não
+  -- disparar todo dia uma DAG que não traz nada novo (cada disparo tem custo).
+  fonte('FOCOS-IAT', 'Focos de calor do INPE no Paraná (IAT)', 'INPE (via IAT/PR)', 'eventual',
         'https://geopr.iat.pr.gov.br/server/rest/services/Focos_de_Calor_INPE/FeatureServer/0/query?where=1=1&outFields=*&f=geojson&outSR=4674');
   regra('objectid',  1, 'INTEIRO',   'foco_calor', 'id_inpe',   'TEXTO',     p_obrigatorio => 1, p_chave => 1);
   regra('datahora',  2, 'DATA',      'foco_calor', 'data_hora', 'DATA',      p_obrigatorio => 1,
@@ -118,6 +131,20 @@ BEGIN
   regra('bioma',     7, 'TEXTO',     'foco_calor', 'bioma',     'TEXTO');
   regra('frp',      13, 'DECIMAL',   'foco_calor', 'frp',       'DECIMAL',   p_formato => 'VIRGULA');
   regra('geometry', 14, 'GEOMETRIA', 'foco_calor', 'geometria', 'GEOMETRIA', p_obrigatorio => 1,
+        p_formato => 'PONTO', p_politica => 'QUARENTENA', p_recortar_pr => 1);
+
+  -- Focos de calor direto do INPE (BDQueimadas): substitui o FOCOS-IAT a partir de 2026.
+  fonte('FOCOS-INPE', 'Focos de calor do INPE no Paraná (BDQueimadas)', 'INPE', 'diária',
+        'https://terrabrasilis.dpi.inpe.br/queimadas/geoserver/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=dados_abertos:focos_ano_atual_br_todosats&CQL_FILTER=id_1=41&outputFormat=application/json');
+  regra('foco_id',        2, 'TEXTO',     'foco_calor', 'id_inpe',   'TEXTO',     p_obrigatorio => 1, p_chave => 1);
+  regra('data_hora_gmt',  5, 'DATA',      'foco_calor', 'data_hora', 'DATA',      p_obrigatorio => 1,
+        p_formato => 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+  regra('satelite',       7, 'TEXTO',     'foco_calor', 'satelite',  'TEXTO',     p_obrigatorio => 1);
+  regra('municipio',      8, 'TEXTO',     'foco_calor', 'municipio', 'TEXTO');
+  regra('bioma',         14, 'TEXTO',     'foco_calor', 'bioma',     'TEXTO');
+  regra('id_2',          17, 'INTEIRO',   'foco_calor', 'cod_ibge',  'TEXTO');
+  regra('frp',           21, 'DECIMAL',   'foco_calor', 'frp',       'DECIMAL');
+  regra('geometry',      22, 'GEOMETRIA', 'foco_calor', 'geometria', 'GEOMETRIA', p_obrigatorio => 1,
         p_formato => 'PONTO', p_politica => 'QUARENTENA', p_recortar_pr => 1);
 
   fonte('RL-IAT', 'Reserva Legal do CAR no Paraná (IAT)', 'SFB/SICAR (via IAT/PR)', 'mensal',
