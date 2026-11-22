@@ -32,7 +32,8 @@ public record FonteResponse(
         String cron,
         boolean coletando,
         OffsetDateTime ultimaColetaEm,
-        String ultimaColetaMensagem
+        String ultimaColetaMensagem,
+        Long grupoId
 ) {
     public static FonteResponse de(Fonte f, List<ArquivoBruto> arquivos) {
         return new FonteResponse(
@@ -54,7 +55,8 @@ public record FonteResponse(
                 f.getColetaSolicitadaEm() != null
                         || (f.getUltimaColetaMensagem() != null && f.getUltimaColetaEm() == null),
                 f.getUltimaColetaEm(),
-                f.getUltimaColetaMensagem()
+                f.getUltimaColetaMensagem(),
+                f.getGrupoId()
         );
     }
 
