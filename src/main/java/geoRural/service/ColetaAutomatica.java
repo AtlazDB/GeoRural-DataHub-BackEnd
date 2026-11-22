@@ -5,7 +5,6 @@ import geoRural.exception.AirflowIndisponivelException;
 import geoRural.repository.FonteRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -36,13 +35,9 @@ public class ColetaAutomatica {
     private final ColetaLinkService coletaLinkService;
     private final Clock relogio;
 
-    // Com dois construtores o Spring precisa saber qual usar (o outro é só para os testes).
-    @Autowired
-    public ColetaAutomatica(FonteRepository fonteRepository, ColetaLinkService coletaLinkService) {
-        this(fonteRepository, coletaLinkService, Clock.system(AgendaColeta.FUSO));
-    }
-
-    ColetaAutomatica(FonteRepository fonteRepository, ColetaLinkService coletaLinkService, Clock relogio) {
+    // Um construtor só: o Spring usa este sem precisar de anotação. O relógio vem do
+    // AgendamentoConfig (fuso de Brasília); os testes passam um relógio fixo.
+    public ColetaAutomatica(FonteRepository fonteRepository, ColetaLinkService coletaLinkService, Clock relogio) {
         this.fonteRepository = fonteRepository;
         this.coletaLinkService = coletaLinkService;
         this.relogio = relogio;

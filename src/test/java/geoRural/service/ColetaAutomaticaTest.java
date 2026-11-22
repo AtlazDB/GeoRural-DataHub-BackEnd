@@ -1,5 +1,6 @@
 package geoRural.service;
 
+import geoRural.config.AgendamentoConfig;
 import geoRural.entity.Fonte;
 import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.RequisicaoInvalidaException;
@@ -44,7 +45,7 @@ class ColetaAutomaticaTest {
                 .withPropertyValues("app.coleta-automatica.habilitada=true")
                 .withBean(FonteRepository.class, () -> mock(FonteRepository.class))
                 .withBean(ColetaLinkService.class, () -> mock(ColetaLinkService.class))
-                .withUserConfiguration(ColetaAutomatica.class)
+                .withUserConfiguration(AgendamentoConfig.class, ColetaAutomatica.class)
                 .run(contexto -> {
                     assertThat(contexto).hasNotFailed();
                     assertThat(contexto).hasSingleBean(ColetaAutomatica.class);
@@ -56,7 +57,7 @@ class ColetaAutomaticaTest {
         new ApplicationContextRunner()
                 .withBean(FonteRepository.class, () -> mock(FonteRepository.class))
                 .withBean(ColetaLinkService.class, () -> mock(ColetaLinkService.class))
-                .withUserConfiguration(ColetaAutomatica.class)
+                .withUserConfiguration(AgendamentoConfig.class, ColetaAutomatica.class)
                 .run(contexto -> assertThat(contexto).doesNotHaveBean(ColetaAutomatica.class));
     }
 
