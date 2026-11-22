@@ -147,6 +147,17 @@ public class FonteServiceImpl implements FonteService {
         }
 
         validarLink(request);
+
+        // Cron errado não pode ser aceito calado: a fonte ficaria sem coleta automática sem ninguém saber.
+        if (!vazio(request.cron())) {
+            try {
+                AgendaColeta.cron(request.cron());
+            } catch (IllegalArgumentException e) {
+                throw new RequisicaoInvalidaException(
+                        "Cron inválido. Use 5 campos (minuto hora dia mês dia-da-semana), ex.: 0 3 1 * * "
+                                + "para todo dia 1 às 3 h.", List.of("cron"));
+            }
+        }
     }
 
     /**
