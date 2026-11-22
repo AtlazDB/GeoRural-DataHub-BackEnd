@@ -81,6 +81,8 @@ class IndicatorDefinitionRepositoryTest {
                 DELETE FROM execucao WHERE arquivo_bruto_id IN (SELECT id FROM arquivo_bruto WHERE chave_objeto = ?)
                 """, CHAVE);
         jdbc.update("DELETE FROM arquivo_bruto WHERE chave_objeto = ?", CHAVE);
+        jdbc.update("DELETE FROM regra_campo WHERE fonte_id IN (SELECT id FROM fonte WHERE sigla = ?)", SIGLA_FONTE);
+        jdbc.update("DELETE FROM fonte_coluna WHERE fonte_id IN (SELECT id FROM fonte WHERE sigla = ?)", SIGLA_FONTE);
         jdbc.update("DELETE FROM fonte WHERE sigla = ?", SIGLA_FONTE);
     }
 
@@ -90,12 +92,35 @@ class IndicatorDefinitionRepositoryTest {
     }
 
     @Test
-    void findsTheGeometryTypesOfTheSource() {
+    void findsTheGeometryTypeOfTheSourceFromOneFeature() {
         inserirPonto();
         inserirPonto();
+
+        assertThat(repository.findGeometryTypesBySource(fonteId)).containsExactly(1);
+    }
+
+    @Test
+    void addsTheTypeDeclaredInTheMappingToTheSample() {
+        mapearGeometria("POLIGONO");
         inserirPoligono();
 
+        assertThat(repository.findGeometryTypesBySource(fonteId)).containsExactly(3);
+    }
+
+    @Test
+    void mappingChangedAfterTheLoadShowsBothTypes() {
+        // Carregou como ponto e depois trocaram o mapeamento para polígono, sem reprocessar.
+        mapearGeometria("POLIGONO");
+        inserirPonto();
+
         assertThat(repository.findGeometryTypesBySource(fonteId)).containsExactlyInAnyOrder(1, 3);
+    }
+
+    @Test
+    void mappingWithoutDataStillHasNoGeometryTypes() {
+        mapearGeometria("PONTO");
+
+        assertThat(repository.findGeometryTypesBySource(fonteId)).isEmpty();
     }
 
     @Test
@@ -139,6 +164,16 @@ class IndicatorDefinitionRepositoryTest {
         assertThat(repository.activate(CODE)).isTrue();
         assertThat(repository.findByCode(CODE).orElseThrow().active()).isTrue();
         assertThat(repository.activate("NAOEXISTE")).isFalse();
+    }
+
+    private void mapearGeometria(String tipoEsperado) {
+        jdbc.update("INSERT INTO fonte_coluna (fonte_id, nome_coluna) VALUES (?, 'geometry')", fonteId);
+        jdbc.update("""
+                INSERT INTO regra_campo
+                  (fonte_id, fonte_coluna_id, destino_tabela, campo_destino, tipo_dado, formato_origem,
+                   politica_geometria, obrigatorio, chave)
+                SELECT ?, id, 'input_feature', 'geometria', 'GEOMETRIA', ?, 'CORRIGIR_E_REGISTRAR', 1, 0
+                  FROM fonte_coluna WHERE fonte_id = ?""", fonteId, tipoEsperado, fonteId);
     }
 
     private void inserirPonto() {
