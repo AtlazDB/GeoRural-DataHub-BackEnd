@@ -79,6 +79,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
+    @ExceptionHandler(GrupoDuplicadoException.class)
+    public ResponseEntity<ErroResponse> handleGrupoDuplicado(GrupoDuplicadoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
     @ExceptionHandler(SiglaDuplicadaException.class)
     public ResponseEntity<ErroResponse> handleSiglaDuplicada(SiglaDuplicadaException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
