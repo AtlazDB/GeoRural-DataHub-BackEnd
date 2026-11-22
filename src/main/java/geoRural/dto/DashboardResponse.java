@@ -18,7 +18,10 @@ public record DashboardResponse(
     ) {}
 
     public record ExecucaoRecente(
+            long id,
+            String sigla,
             String fonte,
+            String origem,
             String tipo,
             String status,
             Integer registrosLidos,

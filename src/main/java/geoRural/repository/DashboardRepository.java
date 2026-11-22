@@ -90,7 +90,10 @@ public class DashboardRepository {
 
         String sql = """
                 SELECT
+                    e.ID,
+                    f.SIGLA,
                     f.NOME AS FONTE,
+                    a.ORIGEM,
                     e.TIPO,
                     e.STATUS,
                     e.REGISTROS_LIDOS,
@@ -108,7 +111,10 @@ public class DashboardRepository {
 
         return jdbc.query(sql, (rs, rowNum) ->
         new ExecucaoRecenteDados(
+                rs.getLong("ID"),
+                rs.getString("SIGLA"),
                 rs.getString("FONTE"),
+                rs.getString("ORIGEM"),
                 rs.getString("TIPO"),
                 rs.getString("STATUS"),
                 rs.getObject("REGISTROS_LIDOS") != null
@@ -127,7 +133,10 @@ public class DashboardRepository {
     }
 
     public record ExecucaoRecenteDados(
+            long id,
+            String sigla,
             String fonte,
+            String origem,
             String tipo,
             String status,
             Integer registrosLidos,

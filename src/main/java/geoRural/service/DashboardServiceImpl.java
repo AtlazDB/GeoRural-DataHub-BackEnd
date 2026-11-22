@@ -30,7 +30,10 @@ public class DashboardServiceImpl implements DashboardService {
                 dashboardRepository.listarExecucoesRecentes()
                         .stream()
                         .map(execucao -> new DashboardResponse.ExecucaoRecente(
+                                execucao.id(),
+                                execucao.sigla(),
                                 execucao.fonte(),
+                                execucao.origem(),
                                 execucao.tipo(),
                                 execucao.status(),
                                 execucao.registrosLidos(),
