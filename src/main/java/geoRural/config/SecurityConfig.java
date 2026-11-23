@@ -62,7 +62,7 @@ public class SecurityConfig {
                         // --- Consulta territorial e indicadores (somente leitura) ---
                         // Inclui /imoveis/{cod}/indicadores e o histórico.
                         .requestMatchers(HttpMethod.GET, "/api/v1/focos/**", "/api/v1/imoveis/**",
-                                "/api/v1/municipios/**", "/api/v1/indicators/**")
+                                "/api/v1/municipios/**", "/api/v1/indicators/**", "/api/v1/camadas/**")
                         .hasAnyRole(ANALISTA, AUDITOR, OPERADOR, GESTOR)
 
                         // --- Criar, calcular e desativar indicador; pipeline ---
