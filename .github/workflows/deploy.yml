@@ -47,7 +47,7 @@ jobs:
       - name: Compilar e rodar os testes que nao precisam de banco
         run: >
           mvn -B -q verify
-          -Dtest='*ControllerTest,ProcessamentoArquivoServiceTest,ColetaLinkServiceTest,TesteLinkServiceTest,ValidadorUrlExternaTest,AirflowClientTest,AgendaColetaTest,ColetaAutomaticaTest,FonteLinkValidacaoTest'
+          -Dtest='*ControllerTest,ProcessamentoArquivoServiceTest,ColetaLinkServiceTest,TesteLinkServiceTest,ValidadorUrlExternaTest,AirflowClientTest,AgendaColetaTest,ColetaAutomaticaTest,FonteLinkValidacaoTest,CamadaServiceTest'
           -Dsurefire.failIfNoSpecifiedTests=false
 
   deploy:
