@@ -79,6 +79,15 @@ class FonteEdicaoTest {
                 .hasMessageContaining("precisa do link");
     }
 
+    @Test
+    void desativaEAtivaDeNovoSemMexerNoResto() {
+        Fonte desligada = service.alterarAtiva(7L, false);
+
+        assertThat(desligada.isAtiva()).isFalse();
+        assertThat(desligada.getUrlOrigem()).isNotNull();
+        assertThat(service.alterarAtiva(7L, true).isAtiva()).isTrue();
+    }
+
     private static FonteRequest pedido(String sigla, String modalidade, String url) {
         return new FonteRequest("Municípios do Paraná (IAT)", sigla, "Instituto Água e Terra", "GeoJSON", "anual",
                 modalidade, url, "GET", null, null, null, null, null);

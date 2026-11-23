@@ -11,7 +11,9 @@ public record ArquivoBrutoResponse(
         OffsetDateTime enviadoEm,
         String hash,
         String status,
-        String origem
+        String origem,
+        Integer progress,
+        String progressStep
 ) {
     public static ArquivoBrutoResponse de(ArquivoBruto a) {
         return new ArquivoBrutoResponse(
@@ -21,7 +23,9 @@ public record ArquivoBrutoResponse(
                 a.getRecebidoEm(),
                 "sha256:" + a.getHashSha256(),
                 a.getStatus(),
-                a.getOrigem()
+                a.getOrigem(),
+                a.getProgress(),
+                a.getProgressStep()
         );
     }
 }

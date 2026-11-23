@@ -67,7 +67,7 @@ public class Fonte {
 
     // --- Coleta pelo Airflow (V18) ---
 
-    /** Pedido de coleta ainda não atendido pela DAG coleta_fontes. */
+    /** Pedido de coleta ainda não atendido pela DAG coletar_fonte. */
     @Column(name = "COLETA_SOLICITADA_EM")
     private OffsetDateTime coletaSolicitadaEm;
 
@@ -76,6 +76,10 @@ public class Fonte {
 
     @Column(name = "ULTIMA_COLETA_MENSAGEM")
     private String ultimaColetaMensagem;
+
+    // Grupo da tela (V31): só organiza os cards; null = sem grupo.
+    @Column(name = "GRUPO_ID")
+    private Long grupoId;
 
     // Construtores, Getters e Setters
     public Fonte() {}
@@ -133,4 +137,7 @@ public class Fonte {
     public OffsetDateTime getUltimaColetaEm() { return ultimaColetaEm; }
 
     public String getUltimaColetaMensagem() { return ultimaColetaMensagem; }
+
+    public Long getGrupoId() { return grupoId; }
+    public void setGrupoId(Long grupoId) { this.grupoId = grupoId; }
 }

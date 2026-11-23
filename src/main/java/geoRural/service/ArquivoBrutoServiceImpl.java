@@ -64,6 +64,10 @@ public class ArquivoBrutoServiceImpl implements ArquivoBrutoService {
     @Transactional
     public ArquivoBruto receber(Long fonteId, MultipartFile arquivo) throws IOException {
         Fonte fonte = fonteService.buscarPorId(fonteId);
+        if (!fonte.isAtiva()) {
+            throw new RequisicaoInvalidaException(
+                    "A fonte " + fonte.getSigla() + " está desativada: ative a fonte para enviar arquivos.");
+        }
 
         if (arquivo == null || arquivo.isEmpty()) {
             throw new RequisicaoInvalidaException("Nenhum arquivo enviado.");

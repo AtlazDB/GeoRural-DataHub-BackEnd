@@ -18,7 +18,7 @@ import java.util.Locale;
 @Service
 public class FonteServiceImpl implements FonteService {
 
-    private static final List<String> FORMATOS = List.of("CSV", "GeoJSON", "SHP", "XLSX", "JSON");
+    private static final List<String> FORMATOS = List.of("CSV", "GeoJSON", "SHP"); // só o que a ingestão lê
     private static final int SIGLA_MAX = 12;
     private static final List<String> MODALIDADES = List.of("MANUAL", "LINK");
     private static final List<String> METODOS = List.of("GET", "POST");
@@ -113,6 +113,14 @@ public class FonteServiceImpl implements FonteService {
     }
 
     @Override
+    @Transactional
+    public Fonte alterarAtiva(Long id, boolean ativa) {
+        Fonte fonte = buscarPorId(id);
+        fonte.setAtiva(ativa);
+        return repository.save(fonte);
+    }
+
+    @Override
     public Fonte buscarPorId(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new FonteNaoEncontradaException(id));
@@ -139,6 +147,17 @@ public class FonteServiceImpl implements FonteService {
         }
 
         validarLink(request);
+
+        // Cron errado não pode ser aceito calado: a fonte ficaria sem coleta automática sem ninguém saber.
+        if (!vazio(request.cron())) {
+            try {
+                AgendaColeta.cron(request.cron());
+            } catch (IllegalArgumentException e) {
+                throw new RequisicaoInvalidaException(
+                        "Cron inválido. Use 5 campos (minuto hora dia mês dia-da-semana), ex.: 0 3 1 * * "
+                                + "para todo dia 1 às 3 h.", List.of("cron"));
+            }
+        }
     }
 
     /**

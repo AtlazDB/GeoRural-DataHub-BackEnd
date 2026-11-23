@@ -15,8 +15,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
+@Tag(name = "Mapeamento", description = "Como cada coluna da fonte chega à Zona Tratada: destino, tipo e regras")
 @RequestMapping("/api/v1/fontes/{fonteId}/mapeamentos")
 public class MapeamentoController {
 
@@ -26,6 +29,7 @@ public class MapeamentoController {
         this.mapeamentoService = mapeamentoService;
     }
 
+    @Operation(summary = "Mapeamento das colunas da fonte")
     @GetMapping
     public List<MapeamentoResponse> listar(@PathVariable Long fonteId) {
         return mapeamentoService.listar(fonteId).stream()
@@ -33,6 +37,7 @@ public class MapeamentoController {
                 .toList();
     }
 
+    @Operation(summary = "Mapeia uma coluna da fonte")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MapeamentoResponse criar(@PathVariable Long fonteId, @RequestBody MapeamentoRequest request) {
@@ -40,12 +45,14 @@ public class MapeamentoController {
     }
 
     /** Edita destino e regras (a coluna não muda). 200 · 400 · 404 · 409. */
+    @Operation(summary = "Edita o destino e as regras de uma coluna")
     @PutMapping("/{mapeamentoId}")
     public MapeamentoResponse atualizar(@PathVariable Long fonteId, @PathVariable Long mapeamentoId,
                                         @RequestBody MapeamentoRequest request) {
         return MapeamentoResponse.de(mapeamentoService.atualizar(fonteId, mapeamentoId, request));
     }
 
+    @Operation(summary = "Remove o mapeamento de uma coluna")
     @DeleteMapping("/{mapeamentoId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remover(@PathVariable Long fonteId, @PathVariable Long mapeamentoId) {

@@ -25,11 +25,11 @@ class DestinoServiceTest {
     private DestinoService destinos;
 
     @Test
-    void listaAsQuatroTabelasComOsCamposETipos() {
+    void listaAsCincoTabelasComOsCamposETipos() {
         List<DestinoResponse> lista = destinos.listar();
 
         assertThat(lista).extracting(DestinoResponse::tabela)
-                .containsExactly("imovel_rural", "car_reserva_legal", "foco_calor", "municipio");
+                .containsExactly("imovel_rural", "car_reserva_legal", "foco_calor", "municipio", "input_feature");
         DestinoResponse rl = lista.get(1);
         assertThat(rl.campos()).extracting(DestinoResponse.Campo::nome)
                 .contains("cod_imovel", "area_ha", "situacao", "geometria")
@@ -38,10 +38,24 @@ class DestinoServiceTest {
         assertThat(campo(rl, "area_ha").obrigatorio()).isTrue();
         assertThat(campo(rl, "geometria").tipo()).isEqualTo("GEOMETRIA");
         assertThat(campo(lista.get(2), "data_hora").tipo()).isEqualTo("DATA");
-        // estado do município é obrigatório na tabela, mas o pkg_tratada preenche sozinho
         DestinoResponse.Campo estado = campo(lista.get(3), "estado");
         assertThat(estado.obrigatorio()).isFalse();
         assertThat(estado.observacao()).contains("código IBGE");
+    }
+
+    @Test
+    void ofereceOInsumoGenericoComGeometriaObrigatoriaEORestoOpcional() {
+        DestinoResponse insumo = destinos.listar().get(4);
+
+        assertThat(insumo.rotulo()).isEqualTo("Insumo genérico (indicadores)");
+        assertThat(insumo.campos()).extracting(DestinoResponse.Campo::nome)
+                .containsExactly("geometria", "categoria", "data_referencia", "valor");
+        assertThat(campo(insumo, "geometria").tipo()).isEqualTo("GEOMETRIA");
+        assertThat(campo(insumo, "geometria").obrigatorio()).isTrue();
+        assertThat(campo(insumo, "categoria").tipo()).isEqualTo("TEXTO");
+        assertThat(campo(insumo, "data_referencia").tipo()).isEqualTo("DATA");
+        assertThat(campo(insumo, "valor").tipo()).isEqualTo("DECIMAL");
+        assertThat(campo(insumo, "valor").obrigatorio()).isFalse();
     }
 
     @Test

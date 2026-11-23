@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -38,6 +39,7 @@ class TesteLinkServiceTest {
     private String base;
     private final List<String> pedidos = new ArrayList<>();
     private TesteLinkService teste;
+    private ValidadorUrlExterna validador;
 
     @BeforeEach
     void subirServidor() throws IOException {
@@ -72,6 +74,11 @@ class TesteLinkServiceTest {
                 responder(troca, "id;lat;lon;data_hora_gmt\n1;-25.1;-50.1;2026-09-10\n", "text/csv"));
         servidor.createContext("/dados/biomas.zip", troca ->
                 responder(troca, "PK\u0003\u0004 conteúdo de mentira", "application/zip"));
+        servidor.createContext("/velho", troca -> {
+            troca.getResponseHeaders().add("Location", "/dados/focos.csv");
+            troca.sendResponseHeaders(302, -1);
+            troca.close();
+        });
         servidor.createContext("/sumiu", troca -> {
             troca.sendResponseHeaders(404, -1);
             troca.close();
@@ -79,7 +86,7 @@ class TesteLinkServiceTest {
         servidor.start();
         base = "http://127.0.0.1:" + servidor.getAddress().getPort();
 
-        ValidadorUrlExterna validador = mock(ValidadorUrlExterna.class);
+        validador = mock(ValidadorUrlExterna.class);
         when(validador.validar(anyString())).thenAnswer(chamada -> URI.create(chamada.getArgument(0)));
         teste = new TesteLinkServiceImpl(new ClienteHttpExterno(validador, new ObjectMapper(), 30), new ObjectMapper());
     }
@@ -138,6 +145,14 @@ class TesteLinkServiceTest {
         assertThatThrownBy(() -> teste.testar(pedido(base + "/sumiu")))
                 .isInstanceOf(ColetaFalhouException.class)
                 .hasMessage("O servidor de origem respondeu HTTP 404.");
+    }
+
+    @Test
+    void segueORedirecionamentoConferindoODestino() {
+        TesteLinkResponse r = teste.testar(pedido(base + "/velho"));
+
+        assertThat(r.colunas()).isNotEmpty();
+        verify(validador).validar(base + "/dados/focos.csv");  // o destino também passa pela trava
     }
 
     @Test

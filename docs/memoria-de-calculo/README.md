@@ -1,8 +1,10 @@
 # Memória de cálculo — IRL e IFC
 
-Como o Oracle chega aos valores de **IRL** (Índice de Reserva Legal) e **IFC** (Índice de Focos de Calor) de cada imóvel, e como conferir um caso no QGIS.
+Como o sistema chega aos valores de **IRL** (Índice de Reserva Legal) e **IFC** (Índice de Focos de Calor) de cada imóvel, e como conferir um caso no QGIS.
 
-O cálculo fica no package `pkg_indicadores` (`R__pkg_indicadores.sql`). As regras e os parâmetros ficam na tabela `regra_calculo` (`V12__indicadores_irl_ifc.sql`). Para recalcular, use `POST /api/v1/pipeline/indicadores`. Para consultar, use `GET /api/v1/imoveis/{codImovel}/indicadores`.
+O cálculo fica no Airflow, em Python/GeoPandas: as contas em `dags/georural/indicators.py` e a leitura e a gravação em `dags/georural/irl_ifc.py` (repositório GeoRural-DataHub). A DAG `calcular_indicadores` recalcula todos os imóveis e grava em `indicador_imovel`. As regras e os parâmetros ficam na tabela `regra_calculo` (`V12__indicadores_irl_ifc.sql`). Para recalcular, use `POST /api/v1/pipeline/indicadores`, que dispara a DAG e volta logo (o cálculo leva alguns minutos); a carga do CAR, da RL ou dos focos também recalcula sozinha no fim. Para consultar, use `GET /api/v1/imoveis/{codImovel}/indicadores`.
+
+Até a US13.T10 o cálculo era do pacote PL/SQL `pkg_indicadores`, apagado na `V24__remove_pkg_indicadores.sql`. Antes de apagar, o Python foi comparado com o pacote em todos os imóveis do PR, com a RL do SICAR (355.220 áreas) e os focos de outubro de 2026 carregados: **1.115.205 linhas iguais e nenhuma diferente** (IRL e IFC, campo a campo). Os exemplos abaixo foram conferidos ainda no Oracle; os números são os mesmos no Python.
 
 ## Regras vigentes
 
@@ -15,7 +17,7 @@ O cálculo fica no package `pkg_indicadores` (`R__pkg_indicadores.sql`). As regr
 | Status | ≥ 20%: Conforme; < 20%: Crítico | 0 focos: Conforme; < 20: Alerta; ≥ 20: Crítico |
 | Extra | saldo (ha) = área RL − 20% da área do imóvel | — |
 
-Os valores são arredondados em 4 casas. Os parâmetros são lidos do JSON da regra na hora do cálculo. Para mudar um limite, cadastra-se uma nova versão da regra, e os cálculos antigos continuam apontando para a versão que usaram.
+Os valores são arredondados em 4 casas, com o 0,5 indo para longe do zero (como o `ROUND` do Oracle, e não para o par como o `round()` do Python), e o status compara o valor já arredondado. As contas são em `Decimal`, nunca em `float`. Os parâmetros são lidos do JSON da regra na hora do cálculo. Para mudar um limite, cadastra-se uma nova versão da regra, e os cálculos antigos continuam apontando para a versão que usaram.
 
 ## Decisões
 
@@ -23,8 +25,8 @@ Os valores são arredondados em 4 casas. Os parâmetros são lidos do JSON da re
 - **Mínimo de 20%**: vale para Mata Atlântica e Cerrado fora da Amazônia Legal (Lei 12.651/2012, art. 12), o que cobre todo o Paraná.
 - **Cobertura do IRL**: o IRL só é calculado para imóveis de municípios que vieram em algum arquivo de RL. Se o município está coberto e o imóvel não tem nenhuma RL declarada, o resultado é 0% (Crítico). Se o município não tem RL carregada, o imóvel fica sem IRL, porque faltaria dado e não seria um déficit.
 - **Satélite de referência**: um mesmo incêndio é detectado uma vez por cada satélite que passa, e somar todos inflaria a contagem. Usamos só o AQUA_M-T, que é o satélite da série histórica do INPE. Conferimos que o arquivo `focos_br_ref_2025` do INPE é 100% AQUA_M-T.
-- **Janela**: são os 12 meses anteriores ao momento do cálculo, contados em UTC, já que `data_hora_gmt` do INPE é UTC. Só entram os focos carregados no banco. Se só um mês foi carregado, a janela tem só esse mês.
-- **Foco dentro do imóvel**: usamos `SDO_RELATE(..., 'mask=ANYINTERACT')`, então um ponto exatamente na divisa conta.
+- **Janela**: são os 12 meses anteriores ao momento do cálculo, contados em UTC, já que `data_hora_gmt` do INPE é UTC. O início segue a regra do `ADD_MONTHS` do Oracle: se o fim é o último dia do mês, o início também é (30/04 − 1 mês = 31/03). Só entram os focos carregados no banco. Se só um mês foi carregado, a janela tem só esse mês.
+- **Foco dentro do imóvel**: o Oracle só separa os imóveis candidatos pelo índice espacial (`SDO_FILTER`); quem decide é o Shapely, com `intersects`, então um ponto exatamente na divisa conta (para os dois imóveis, se cair na divisa entre eles). Diferença conhecida em relação ao antigo `SDO_RELATE ANYINTERACT`: o Oracle tinha tolerância de 5 cm e contava um foco a menos de 5 cm do lado de fora; o Shapely não conta. Na comparação com os dados reais, isso não apareceu.
 - **Referencial**: o CAR vem em SIRGAS 2000 (EPSG:4674) e é gravado como 4326. A diferença para o WGS84 é de centímetros, irrelevante nessa escala.
 - **Recorte**: do CSV nacional do INPE só são gravados os focos do Paraná (`municipio_id` começando em 41). Os demais são contados como "fora do recorte" e não vão para a quarentena.
 
@@ -58,7 +60,7 @@ No incêndio de 26/09/2026 houve 13 detecções em 4 satélites ao redor do imó
 IFC = 1 ÷ 83,1286 × 1000 = 12,0296 focos/1000ha  →  Alerta (entre 0 e 20)
 ```
 
-O Oracle devolveu `12.0296`, `ALERTA`, `numerador = 1`.
+O Oracle (pacote da época) devolveu `12.0296`, `ALERTA`, `numerador = 1`.
 
 Também conferimos todos os imóveis de Bituruna com um ponto-em-polígono independente, feito em Python. Os resultados bateram com o Oracle em 1993 de 1993 imóveis válidos.
 
@@ -81,7 +83,7 @@ IRL   = 4,0527 ÷ 29,121 × 100     = 13,9168 %  →  Crítico (< 20%)
 saldo = 4,0527 − 29,121 × 20 ÷ 100 = −1,7715 ha  (déficit)
 ```
 
-O Oracle devolveu `13.9168`, `CRITICO`, saldo `-1.7715`.
+O Oracle (pacote da época) devolveu `13.9168`, `CRITICO`, saldo `-1.7715`.
 
 Conferimos os 1994 imóveis de Bituruna somando a `num_area` da RL direto do arquivo do SICAR. IRL e saldo bateram com o Oracle em todos. O resultado foi 799 imóveis Conformes e 1195 Críticos.
 
@@ -89,7 +91,7 @@ O SICAR entrega a RL em GeoPackage. Como o processamento da fonte `CAR-RL` lê s
 
 ## Exemplo sintético — IRL
 
-Este caso é coberto pelo teste `IndicadorCalculoTest`:
+Este caso é coberto pelos testes `test_indicators.py` e `test_irl_ifc.py` do Airflow (antes, pelo `IndicadorCalculoTest` do back, que testava o pacote PL/SQL):
 
 - Imóvel com 100,5 ha declarados.
 - Duas áreas de RL que somam 15,5 ha.

@@ -1,54 +1,29 @@
 package geoRural.controller;
 
-import geoRural.dto.CalculoIndicadoresResponse;
-import geoRural.dto.CargaResponse;
-import geoRural.service.CargaMunicipioService;
-import geoRural.service.CargaService;
 import geoRural.service.IndicadorService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
+@Tag(name = "Pipeline", description = "Disparos manuais do pipeline")
 @RequestMapping("/api/v1/pipeline")
 public class PipelineController {
 
-    private final CargaService cargaService;
-    private final CargaMunicipioService cargaMunicipioService;
     private final IndicadorService indicadorService;
 
-    public PipelineController(CargaService cargaService,
-                              CargaMunicipioService cargaMunicipioService,
-                              IndicadorService indicadorService) {
-        this.cargaService = cargaService;
-        this.cargaMunicipioService = cargaMunicipioService;
+    public PipelineController(IndicadorService indicadorService) {
         this.indicadorService = indicadorService;
     }
 
-    // Dispara o pkg_indicadores. Hoje é chamado pela tela (ou por quem for agendar o cálculo
-    // noturno); os indicadores ficam versionados, então rodar de novo não duplica nada.
+    // Dispara a DAG calcular_indicadores (IRL e IFC em Python, no Airflow) e volta logo: 202, e os
+    // valores novos aparecem em alguns minutos. 503 se o Airflow estiver fora do ar ou a DAG pausada.
+    // Os indicadores ficam versionados, então rodar de novo não duplica nada.
+    @Operation(summary = "Recalcula os indicadores de todos os imóveis (dispara a DAG no Airflow)")
     @PostMapping("/indicadores")
-    public CalculoIndicadoresResponse calcularIndicadores() {
-        return indicadorService.calcular();
-    }
-
-    // O corpo chega como String e é lido pelo Jackson/JTS no serviço: assim o
-    // endpoint aceita application/json e application/geo+json.
-    @PostMapping("/carga")
-    @ResponseStatus(HttpStatus.CREATED)
-    public CargaResponse carregar(
-            @RequestParam Long arquivoBrutoId,
-            @RequestBody String geoJson) {
-
-        return cargaService.carregar(arquivoBrutoId, geoJson);
-    }
-
-    // Mesma forma da carga de imóveis, com a malha municipal do IBGE no corpo.
-    @PostMapping("/carga/municipios")
-    @ResponseStatus(HttpStatus.CREATED)
-    public CargaResponse carregarMunicipios(
-            @RequestParam Long arquivoBrutoId,
-            @RequestBody String geoJson) {
-
-        return cargaMunicipioService.carregar(arquivoBrutoId, geoJson);
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void calcularIndicadores() {
+        indicadorService.calcular();
     }
 }

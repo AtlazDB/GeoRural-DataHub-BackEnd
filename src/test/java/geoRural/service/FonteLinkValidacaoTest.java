@@ -60,6 +60,21 @@ class FonteLinkValidacaoTest {
                 .isInstanceOf(RequisicaoInvalidaException.class).hasMessageContaining("Método");
     }
 
+    @Test
+    void cronValidoEhGuardadoEInvalidoERecusado() {
+        String url = "https://geopr.iat.pr.gov.br/server/rest/services/Focos/FeatureServer/0/query";
+
+        assertThat(service.cadastrar(comCron(url, " 0 3 1 * * ")).getCron()).isEqualTo("0 3 1 * *");
+        assertThatThrownBy(() -> service.cadastrar(comCron(url, "todo dia 1")))
+                .isInstanceOf(RequisicaoInvalidaException.class)
+                .hasMessageContaining("Cron inválido");
+    }
+
+    private static FonteRequest comCron(String url, String cron) {
+        return new FonteRequest("Fonte de teste", "TESTE", "Órgão", "SHP", "mensal",
+                "LINK", url, "GET", null, null, null, null, cron);
+    }
+
     private static FonteRequest fonte(String modalidade, String url, String metodo) {
         return new FonteRequest("Fonte de teste", "TESTE", "Órgão", "SHP", "mensal",
                 modalidade, url, metodo, null, null, null, null, null);

@@ -5,8 +5,11 @@ import geoRural.service.ArquivoBrutoService;
 import geoRural.service.ProcessamentoArquivoService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
+@Tag(name = "Arquivos", description = "Arquivos da zona bruta: fila do Airflow e exclusão")
 @RequestMapping("/api/v1/arquivos")
 public class ArquivoController {
 
@@ -20,16 +23,27 @@ public class ArquivoController {
     }
 
     /**
-     * Síncrono por enquanto: a resposta só volta quando o processamento termina.
-     * Com o arquivo do Paraná isso vai passar do timeout do navegador; aí vira @Async + 202.
-     * O leitor é escolhido pela fonte do arquivo: CAR (imóveis), CAR-RL (Reserva Legal) ou INPE-FOCOS.
+     * Reserva o arquivo e dispara a DAG processar_arquivo. A resposta é imediata: o resultado chega
+     * depois, pelo status do arquivo. Airflow fora do ar: 503, e o arquivo fica RECEBIDO.
      */
+    @Operation(summary = "Dispara no Airflow o processamento do arquivo (PROCESSANDO)")
     @PostMapping("/{id}/processar")
     public ProcessamentoResponse processar(@PathVariable Long id) {
         return processamentoArquivoService.processar(id);
     }
 
+    /**
+     * Encerra no Airflow o processamento em andamento. O arquivo fica REJEITADO e pode ser
+     * processado de novo. Arquivo que não está PROCESSANDO: 409.
+     */
+    @Operation(summary = "Cancela o processamento em andamento do arquivo (REJEITADO)")
+    @PostMapping("/{id}/cancelar")
+    public ProcessamentoResponse cancelar(@PathVariable Long id) {
+        return processamentoArquivoService.cancelar(id);
+    }
+
     /** Só para arquivo REJEITADO que nunca gerou versão de dados; senão 409. */
+    @Operation(summary = "Exclui um arquivo rejeitado que nunca gerou versão de dados")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void excluir(@PathVariable Long id) {

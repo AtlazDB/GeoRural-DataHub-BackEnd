@@ -1,63 +1,88 @@
 package geoRural.service;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
+
 import geoRural.dto.ProcessamentoResponse;
+import geoRural.exception.AirflowIndisponivelException;
 import geoRural.exception.ArquivoNaoEncontradoException;
 import geoRural.exception.ProcessamentoEmAndamentoException;
-import geoRural.exception.RequisicaoInvalidaException;
-import geoRural.service.GravadorImoveis.ArquivoParaProcessar;
+import geoRural.exception.ProcessamentoNaoEmAndamentoException;
 
 /**
- * Com o Airflow ligado (AIRFLOW_HABILITADO), qualquer arquivo volta para a fila (RECEBIDO) e a DAG
- * processar_arquivo escolhe o caminho: o shapefile do CAR pelo caminho próprio, o resto pelo
- * genérico, guiado pelo mapeamento da fonte.
- *
- * Sem o Airflow, escolhe o processamento Java pela sigla da fonte do arquivo: CAR (imóveis), CAR-RL
- * (Reserva Legal) ou INPE-FOCOS (focos de calor). Cada um confere o próprio formato.
+ * Quem processa é o Airflow: aqui o arquivo, de qualquer fonte, é reservado (PROCESSANDO) e a DAG
+ * processar_arquivo é disparada na hora. Ela escolhe o caminho: o shapefile do CAR pelo caminho
+ * próprio, o resto pelo genérico, guiado pelo mapeamento da fonte. O resultado chega depois, pelo
+ * status do arquivo.
  */
 @Service
 public class ProcessamentoArquivoServiceImpl implements ProcessamentoArquivoService {
 
-    private final GravadorImoveis gravador;
-    private final ProcessamentoCarService imoveis;
-    private final ProcessamentoReservaLegalService reservaLegal;
-    private final ProcessamentoFocosService focos;
-    private final boolean processarNoAirflow;
+    private static final String DAG_PROCESSAR = "processar_arquivo";
 
-    public ProcessamentoArquivoServiceImpl(GravadorImoveis gravador,
-                                           ProcessamentoCarService imoveis,
-                                           ProcessamentoReservaLegalService reservaLegal,
-                                           ProcessamentoFocosService focos,
-                                           @Value("${app.processamento.airflow:false}") boolean processarNoAirflow) {
-        this.gravador = gravador;
-        this.imoveis = imoveis;
-        this.reservaLegal = reservaLegal;
-        this.focos = focos;
-        this.processarNoAirflow = processarNoAirflow;
+    private final JdbcTemplate jdbc;
+    private final AirflowClient airflow;
+
+    public ProcessamentoArquivoServiceImpl(JdbcTemplate jdbc, AirflowClient airflow) {
+        this.jdbc = jdbc;
+        this.airflow = airflow;
     }
 
     @Override
     public ProcessamentoResponse processar(Long arquivoId) {
-        ArquivoParaProcessar arquivo = gravador.buscarArquivo(arquivoId)
-                .orElseThrow(() -> new ArquivoNaoEncontradoException(arquivoId));
-
-        if (processarNoAirflow) {
-            // RECEBIDO é o que o varredor do Airflow procura: em até 2 minutos ele pega o arquivo.
-            if (!gravador.marcarRecebido(arquivoId)) {
-                throw new ProcessamentoEmAndamentoException(arquivoId);
-            }
-            return ProcessamentoResponse.agendado(arquivoId);
+        Integer existe = jdbc.queryForObject("SELECT COUNT(*) FROM arquivo_bruto WHERE id = ?", Integer.class, arquivoId);
+        if (existe == null || existe == 0) {
+            throw new ArquivoNaoEncontradoException(arquivoId);
         }
-        String sigla = arquivo.siglaFonte() == null ? "" : arquivo.siglaFonte().toUpperCase();
-        return switch (sigla) {
-            case "CAR" -> imoveis.processar(arquivoId);
-            case ProcessamentoReservaLegalServiceImpl.SIGLA -> reservaLegal.processar(arquivoId);
-            case ProcessamentoFocosServiceImpl.SIGLA -> focos.processar(arquivoId);
-            default -> throw new RequisicaoInvalidaException(
-                    "Não há processamento para arquivos da fonte " + arquivo.siglaFonte()
-                            + ". Processam-se arquivos das fontes CAR, CAR-RL e INPE-FOCOS.");
-        };
+        // Vale também para reprocessar um PROCESSADO ou REJEITADO. O UPDATE condicional recusa o
+        // arquivo que a DAG está processando agora, e dois cliques não disparam duas execuções.
+        int reservados = jdbc.update("""
+                UPDATE arquivo_bruto SET status = 'PROCESSANDO', processado_em = NULL
+                 WHERE id = ? AND status <> 'PROCESSANDO'
+                """, arquivoId);
+        if (reservados == 0) {
+            throw new ProcessamentoEmAndamentoException(arquivoId);
+        }
+        try {
+            airflow.disparar(DAG_PROCESSAR, Map.of("arquivo_bruto_id", arquivoId, "reservado", true));
+        } catch (AirflowIndisponivelException e) {
+            // Sem disparo, o arquivo não pode ficar preso em PROCESSANDO: volta, e o botão tenta de novo.
+            jdbc.update("UPDATE arquivo_bruto SET status = 'RECEBIDO' WHERE id = ?", arquivoId);
+            throw e;
+        }
+        return ProcessamentoResponse.disparado(arquivoId);
+    }
+
+    /**
+     * Encerra a execução no Airflow primeiro e só depois marca o arquivo: se o Airflow estiver fora
+     * do ar (503), o arquivo continua PROCESSANDO, coerente com o que de fato está rodando.
+     * Os blocos que a DAG já confirmou ficam gravados, como em qualquer falha no meio; processar
+     * de novo refaz a carga inteira pelo MERGE.
+     */
+    @Override
+    public ProcessamentoResponse cancelar(Long arquivoId) {
+        String status = jdbc.query("SELECT status FROM arquivo_bruto WHERE id = ?",
+                rs -> rs.next() ? rs.getString(1) : null, arquivoId);
+        if (status == null) {
+            throw new ArquivoNaoEncontradoException(arquivoId);
+        }
+        if (!"PROCESSANDO".equals(status)) {
+            throw new ProcessamentoNaoEmAndamentoException(arquivoId);
+        }
+        // Mesmo sem execução viva no Airflow (arquivo preso em PROCESSANDO), o arquivo é liberado.
+        airflow.cancelar(DAG_PROCESSAR, "arquivo_bruto_id", arquivoId);
+
+        jdbc.update("""
+                UPDATE execucao SET status = 'FALHOU', finalizada_em = SYSTIMESTAMP,
+                       mensagem_erro = 'Cancelado pelo usuário.'
+                 WHERE arquivo_bruto_id = ? AND status = 'EM_ANDAMENTO'
+                """, arquivoId);
+        jdbc.update("""
+                UPDATE arquivo_bruto SET status = 'REJEITADO', processado_em = SYSTIMESTAMP
+                 WHERE id = ? AND status = 'PROCESSANDO'
+                """, arquivoId);
+        return ProcessamentoResponse.cancelado(arquivoId);
     }
 }

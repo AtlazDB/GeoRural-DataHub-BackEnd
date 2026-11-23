@@ -1,12 +1,19 @@
 package geoRural.exception;
 
 import geoRural.dto.ErroResponse;
+import geoRural.indicator.exception.DuplicateIndicatorCodeException;
+import geoRural.indicator.exception.IndicatorCalculationInProgressException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+
+import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -41,6 +48,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
+    @ExceptionHandler(AirflowIndisponivelException.class)
+    public ResponseEntity<ErroResponse> handleAirflowIndisponivel(AirflowIndisponivelException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(ErroResponse.de(ex.getMessage()));
+    }
+
     @ExceptionHandler(GravacaoNaoPermitidaException.class)
     public ResponseEntity<ErroResponse> handleGravacaoNaoPermitida(GravacaoNaoPermitidaException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
@@ -50,11 +62,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ColetaFalhouException.class)
     public ResponseEntity<ErroResponse> handleColetaFalhou(ColetaFalhouException ex) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ErroResponse.de(ex.getMessage()));
-    }
-
-    @ExceptionHandler(CargaNaoPermitidaException.class)
-    public ResponseEntity<ErroResponse> handleCargaNaoPermitida(CargaNaoPermitidaException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
     @ExceptionHandler(ExclusaoNaoPermitidaException.class)
@@ -67,14 +74,53 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
+    @ExceptionHandler(ProcessamentoNaoEmAndamentoException.class)
+    public ResponseEntity<ErroResponse> handleProcessamentoNaoEmAndamento(ProcessamentoNaoEmAndamentoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
+    @ExceptionHandler(GrupoDuplicadoException.class)
+    public ResponseEntity<ErroResponse> handleGrupoDuplicado(GrupoDuplicadoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
     @ExceptionHandler(SiglaDuplicadaException.class)
     public ResponseEntity<ErroResponse> handleSiglaDuplicada(SiglaDuplicadaException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
+    @ExceptionHandler(DuplicateIndicatorCodeException.class)
+    public ResponseEntity<ErroResponse> handleDuplicateIndicatorCode(DuplicateIndicatorCodeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IndicatorCalculationInProgressException.class)
+    public ResponseEntity<ErroResponse> handleIndicatorCalculationInProgress(IndicatorCalculationInProgressException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ErroResponse.de(ex.getMessage()));
     }
 
     @ExceptionHandler(RequisicaoInvalidaException.class)
     public ResponseEntity<ErroResponse> handleRequisicaoInvalida(RequisicaoInvalidaException ex) {
         return ResponseEntity.badRequest().body(new ErroResponse(ex.getMessage(), ex.getCampos()));
+    }
+
+    /** Campos que falharam no @Valid (ex.: @NotBlank, @Size), no mesmo formato da RequisicaoInvalidaException. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErroResponse> handleCamposInvalidos(MethodArgumentNotValidException ex) {
+        // "ranges[1].status" vira "ranges": a tela marca o campo de cima
+        List<String> campos = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getField)
+                .map(campo -> campo.split("[.\\[]")[0])
+                .distinct()
+                .toList();
+        return ResponseEntity.badRequest()
+                .body(new ErroResponse("Preencha corretamente: " + String.join(", ", campos) + ".", campos));
+    }
+
+    /** JSON que nem dá para ler (ex.: texto onde vai número). */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErroResponse> handleCorpoIlegivel(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(ErroResponse.de("O corpo da requisição não é um JSON válido."));
     }
 
     @ExceptionHandler(FormatoArquivoNaoAceitoException.class)

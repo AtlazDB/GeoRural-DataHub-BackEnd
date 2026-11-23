@@ -2,11 +2,14 @@ package geoRural.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import geoRural.dto.ProcessamentoResponse;
 import geoRural.exception.ExclusaoNaoPermitidaException;
+import geoRural.exception.ProcessamentoNaoEmAndamentoException;
 import geoRural.service.ArquivoBrutoService;
 import geoRural.service.ProcessamentoArquivoService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,9 +19,14 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+// Testa o comportamento do endpoint, não a matriz de perfis: sem os filtros do Spring Security.
+@AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(ArquivoController.class)
 class ArquivoControllerTest {
 
@@ -33,6 +41,23 @@ class ArquivoControllerTest {
 
     @MockitoBean
     private ArquivoBrutoService arquivoBrutoService;
+
+    @Test
+    void cancelarDevolveOArquivoRejeitado() throws Exception {
+        when(processamentoArquivoService.cancelar(42L)).thenReturn(ProcessamentoResponse.cancelado(42L));
+
+        mockMvc.perform(post("/api/v1/arquivos/42/cancelar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJEITADO"));
+    }
+
+    @Test
+    void cancelarArquivoParadoRespondeConflito() throws Exception {
+        when(processamentoArquivoService.cancelar(9L)).thenThrow(new ProcessamentoNaoEmAndamentoException(9L));
+
+        mockMvc.perform(post("/api/v1/arquivos/9/cancelar"))
+                .andExpect(status().isConflict());
+    }
 
     @Test
     void excluirRespondeSemConteudo() throws Exception {

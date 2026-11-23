@@ -35,7 +35,7 @@ public class MapeamentoServiceImpl implements MapeamentoService {
     private static final String GEOMETRIA = "GEOMETRIA";
 
     private static final int NOME_MAX = 60; // destino_tabela, campo_destino e formato_origem
-    // Letras minúsculas, números e _, começando por letra. O pkg_quality pode usar esses nomes em SQL
+    // Letras minúsculas, números e _, começando por letra. A gravação no Airflow usa esses nomes em SQL
     // dinâmico, então nada além disso é aceito.
     private static final Pattern IDENTIFICADOR = Pattern.compile("^[a-z][a-z0-9_]*$");
 
