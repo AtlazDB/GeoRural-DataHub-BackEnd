@@ -20,6 +20,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * Matriz (rascunho a validar com o PO):
  *   Consulta territorial e indicadores (leitura) ..... ANALISTA, AUDITOR, OPERADOR_DADOS, GESTOR
  *   Fontes, arquivos, mapeamentos, quarentena (leitura) AUDITOR, OPERADOR_DADOS, GESTOR
+ *   Dashboard (leitura) .............................. AUDITOR, OPERADOR_DADOS, GESTOR
  *   Fontes, arquivos, mapeamentos, quarentena (escrita) OPERADOR_DADOS, GESTOR
  *   Domínios, destinos, referências cruzadas ......... OPERADOR_DADOS, GESTOR
  *   Criar/calcular/desativar indicador e pipeline .... OPERADOR_DADOS, GESTOR
@@ -53,6 +54,8 @@ public class SecurityConfig {
 
                         // --- Região do próprio usuário (US10): qualquer perfil logado ---
                         .requestMatchers(HttpMethod.GET, "/api/v1/acesso").authenticated()
+                        // Anotação da tela inicial: cada um lê e grava só a própria (o dono vem do token).
+                        .requestMatchers("/api/v1/notes/me").authenticated()
 
                         // --- Gestão de usuários e perfis (T27): só o GESTOR ---
                         // Já cairia no anyRequest abaixo; a regra explícita deixa a intenção escrita e protege
@@ -79,6 +82,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/fontes/**", "/api/v1/arquivos/**",
                                 "/api/v1/quarentena/**")
                         .hasAnyRole(AUDITOR, OPERADOR, GESTOR)
+
+                        // --- Dashboard (leitura): resume fontes, execuções e quarentena, que esses perfis já leem ---
+                        .requestMatchers(HttpMethod.GET, "/api/v1/dashboard").hasAnyRole(AUDITOR, OPERADOR, GESTOR)
                         // Escrita (POST, PUT, DELETE): só quem opera os dados.
                         .requestMatchers("/api/v1/fontes/**", "/api/v1/arquivos/**", "/api/v1/quarentena/**")
                         .hasAnyRole(OPERADOR, GESTOR)
