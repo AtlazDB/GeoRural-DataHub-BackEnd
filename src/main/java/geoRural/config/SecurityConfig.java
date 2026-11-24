@@ -54,6 +54,8 @@ public class SecurityConfig {
 
                         // --- Região do próprio usuário (US10): qualquer perfil logado ---
                         .requestMatchers(HttpMethod.GET, "/api/v1/acesso").authenticated()
+                        // Anotação da tela inicial: cada um lê e grava só a própria (o dono vem do token).
+                        .requestMatchers("/api/v1/notes/me").authenticated()
 
                         // --- Gestão de usuários e perfis (T27): só o GESTOR ---
                         // Já cairia no anyRequest abaixo; a regra explícita deixa a intenção escrita e protege
